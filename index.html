@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BoothIQ - Professional Booth Estimation</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif; background: #f9fafb; line-height: 1.5; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    .card { background: white; border-radius: 8px; padding: 40px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .header { margin-bottom: 30px; border-bottom: 3px solid #2563eb; padding-bottom: 20px; }
+    .header h1 { color: #1f2937; font-size: 32px; margin-bottom: 10px; }
+    .header p { color: #6b7280; font-size: 16px; }
+    .form-group { margin-bottom: 30px; }
+    .form-label { display: block; margin-bottom: 8px; font-weight: 600; color: #374151; }
+    select, input[type="file"] { width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; }
+    .template-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+    .template-btn { padding: 12px; border: 1px solid #d1d5db; border-radius: 6px; background: white; cursor: pointer; font-size: 14px; font-weight: 500; color: #374151; transition: all 0.2s; }
+    .template-btn:hover { border-color: #2563eb; }
+    .template-btn.active { border: 2px solid #2563eb; background: #eff6ff; color: #2563eb; font-weight: 600; }
+    .upload-zone { border: 2px dashed #d1d5db; border-radius: 8px; padding: 40px; text-align: center; cursor: pointer; background: #fafafa; transition: all 0.2s; }
+    .upload-zone:hover { background: #f3f4f6; border-color: #9ca3af; }
+    .upload-zone.dragging { background: #f0f0f0; border-color: #2563eb; }
+    .upload-zone p { margin: 0; color: #6b7280; }
+    .upload-zone p:first-child { font-weight: 500; color: #374151; margin-bottom: 8px; }
+    .error { background: #fee2e2; border: 1px solid #fca5a5; border-radius: 6px; padding: 12px; margin-bottom: 20px; color: #991b1b; }
+    .loading { text-align: center; padding: 40px; }
+    .spinner { display: inline-block; width: 32px; height: 32px; border: 3px solid #e5e7eb; border-top-color: #2563eb; border-radius: 50%; animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .estimates-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin: 20px 0; }
+    .estimate-card { border: 2px solid; border-radius: 8px; padding: 20px; }
+    .estimate-card.aggressive { border-color: #991b1b; background: #fee2e2; }
+    .estimate-card.middle { border-color: #92400e; background: #fef3c7; }
+    .estimate-card.conservative { border-color: #0c2d6b; background: #dbeafe; }
+    .estimate-card h3 { margin-bottom: 15px; font-size: 16px; font-weight: 600; border-bottom: 2px solid; padding-bottom: 10px; }
+    .estimate-card.aggressive h3 { color: #991b1b; border-bottom-color: #991b1b; }
+    .estimate-card.middle h3 { color: #92400e; border-bottom-color: #92400e; }
+    .estimate-card.conservative h3 { color: #0c2d6b; border-bottom-color: #0c2d6b; }
+    .line-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(0,0,0,0.1); font-size: 14px; }
+    .line-item-label { color: #374151; }
+    .line-item-amount { font-weight: 600; color: #1f2937; }
+    .total-line { display: flex; justify-content: space-between; padding: 12px 0; border-top: 2px solid; margin-top: 10px; font-size: 18px; font-weight: bold; }
+    .estimate-card.aggressive .total-line { border-top-color: #991b1b; color: #991b1b; }
+    .estimate-card.middle .total-line { border-top-color: #92400e; color: #92400e; }
+    .estimate-card.conservative .total-line { border-top-color: #0c2d6b; color: #0c2d6b; }
+    .btn { width: 100%; padding: 12px; background: #2563eb; color: white; border: none; border-radius: 6px; font-size: 16px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
+    .btn:hover { background: #1d4ed8; }
+    .divider { padding-bottom: 30px; margin-bottom: 30px; border-bottom: 1px solid #e5e7eb; }
+    .preview-img { max-width: 100%; border-radius: 6px; max-height: 300px; margin: 15px 0; }
+    .empty-state { text-align: center; color: #9ca3af; padding: 40px; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+const BOOTH_TEMPLATES = {
+  standard10x10: {
+    name: 'Standard 10x10 Booth',
+    wallSqft: 280,
+    floorSqft: 100,
+    wallType: 'paintedMDF',
+    floorType: 'standardCarpet',
+    graphics: 'moderate',
+    furniture: 'light'
+  },
+  standard20x10: {
+    name: 'Standard 20x10 Booth',
+    wallSqft: 580,
+    floorSqft: 200,
+    wallType: 'paintedMDF',
+    floorType: 'standardCarpet',
+    graphics: 'moderate',
+    furniture: 'moderate'
+  },
+  premium20x10: {
+    name: 'Premium 20x10 Booth',
+    wallSqft: 580,
+    floorSqft: 200,
+    wallType: 'oakWood',
+    floorType: 'gFloorNew',
+    graphics: 'premium',
+    furniture: 'premium'
+  },
+  ballPit: {
+    name: 'Ball Pit Activation',
+    wallSqft: 450,
+    floorSqft: 100,
+    wallType: 'paintedMDF',
+    floorType: 'standardCarpet',
+    graphics: 'extensive',
+    furniture: 'minimal'
+  }
+};
+
+const CATALOG_PRICING = {
+  walls: {
+    paintedMDF: 68.75,
+    oakWood: 103.13,
+    complexMillwork: 157.78
+  },
+  flooring: {
+    standardCarpet: 5.50,
+    printedVinyl: 14.30,
+    gFloorNew: 27.27,
+    astroTurf: 16.92
+  }
+};
+
+function BoothIQ() {
+  const [location, setLocation] = React.useState('toronto');
+  const [selectedTemplate, setSelectedTemplate] = React.useState('');
+  const [components, setComponents] = React.useState(null);
+  const [estimates, setEstimates] = React.useState(null);
+  const [uploadedImage, setUploadedImage] = React.useState(null);
+  const [analyzing, setAnalyzing] = React.useState(false);
+  const [error, setError] = React.useState('');
+  const fileInputRef = React.useRef(null);
+  const [dragging, setDragging] = React.useState(false);
+
+  const calculateMaterials = (comps) => {
+    let cost = 0;
+    cost += (comps.wallSqft || 0) * (CATALOG_PRICING.walls[comps.wallType] || 68.75);
+    const floorPrices = {
+      standardCarpet: 5.50,
+      printedVinyl: 14.30,
+      gFloorNew: 27.27,
+      astroTurf: 16.92
+    };
+    cost += (comps.floorSqft || 0) * (floorPrices[comps.floorType] || 5.50);
+    
+    const graphicsPrices = { modest: 12, moderate: 25, premium: 45, extensive: 60 };
+    cost += (comps.graphicsEstimate || 100) * (graphicsPrices[comps.graphics] || 25);
+    
+    return cost;
+  };
+
+  const calculateEstimates = (comps, loc) => {
+    const materials = calculateMaterials(comps);
+    const subtotal = materials;
+    
+    const serviceRates = {
+      toronto: { designPM: 0.09, installDismantle: 0.14, logistics: 0.05 },
+      montreal: { designPM: 0.12, installDismantle: 0.36, logistics: 0.12 },
+      usa: { designPM: 0.10, installDismantle: 0.20, logistics: 0.15 }
+    };
+
+    const rates = serviceRates[loc] || serviceRates.toronto;
+    
+    const estimates = {
+      aggressive: {
+        materials: materials * 0.85,
+        designPM: subtotal * rates.designPM * 0.85,
+        installDismantle: subtotal * rates.installDismantle * 0.80,
+        logistics: subtotal * rates.logistics * 0.90,
+        contingency: 0
+      },
+      middle: {
+        materials: materials,
+        designPM: subtotal * rates.designPM,
+        installDismantle: subtotal * rates.installDismantle,
+        logistics: subtotal * rates.logistics,
+        contingency: subtotal * 0.05
+      },
+      conservative: {
+        materials: materials * 1.20,
+        designPM: subtotal * rates.designPM * 1.15,
+        installDismantle: subtotal * rates.installDismantle * 1.20,
+        logistics: subtotal * rates.logistics * 1.15,
+        contingency: subtotal * 0.15
+      }
+    };
+
+    return Object.entries(estimates).reduce((acc, [tier, costs]) => {
+      acc[tier] = {
+        ...costs,
+        total: Object.values(costs).reduce((sum, val) => sum + val, 0)
+      };
+      return acc;
+    }, {});
+  };
+
+  const handleTemplateSelect = (templateKey) => {
+    setSelectedTemplate(templateKey);
+    const template = BOOTH_TEMPLATES[templateKey];
+    setComponents(template);
+    const calcs = calculateEstimates(template, location);
+    setEstimates(calcs);
+  };
+
+  const handleImageUpload = async (file) => {
+    if (!file) return;
+
+    setError('');
+    setAnalyzing(true);
+    setUploadedImage(URL.createObjectURL(file));
+
+    try {
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const base64 = event.target.result.split(',')[1];
+        if (!base64) throw new Error('Failed to read image');
+
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 1024,
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64 } },
+                  { type: 'text', text: 'Analyze booth rendering and return JSON: {wallSqft: number, floorSqft: number, wallType: "paintedMDF"|"oakWood"|"complexMillwork", floorType: "standardCarpet"|"printedVinyl"|"gFloorNew"|"astroTurf", graphics: "modest"|"moderate"|"premium"|"extensive", graphicsEstimate: number}. Return ONLY valid JSON, no markdown or explanation.' }
+                ]
+              }
+            ]
+          })
+        });
+
+        if (!response.ok) throw new Error('Claude API failed');
+        const data = await response.json();
+        const extracted = JSON.parse(data.content[0].text);
+        setComponents(extracted);
+        
+        const calcs = calculateEstimates(extracted, location);
+        setEstimates(calcs);
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      setError('Error analyzing rendering: ' + err.message);
+      setUploadedImage(null);
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const downloadQuote = () => {
+    if (!estimates) return;
+
+    const quoteHTML = `<!DOCTYPE html><html><head><style>
+      body { font-family: Arial, sans-serif; max-width: 900px; margin: 0; padding: 20px; }
+      .header { text-align: center; border-bottom: 3px solid #2563eb; padding-bottom: 20px; }
+      .header h1 { margin: 0; color: #1f2937; }
+      .estimate-section { margin: 30px 0; border: 2px solid #e5e7eb; border-radius: 8px; padding: 20px; }
+      .tier-badge { display: inline-block; padding: 4px 12px; border-radius: 4px; font-weight: bold; font-size: 12px; margin-bottom: 10px; }
+      .aggressive { background: #fee2e2; color: #991b1b; }
+      .middle { background: #fef3c7; color: #92400e; }
+      .conservative { background: #dbeafe; color: #0c2d6b; }
+      .line-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f3f4f6; }
+      .total-line { display: flex; justify-content: space-between; padding: 12px 0; border-top: 2px solid #1f2937; font-size: 18px; font-weight: bold; margin-top: 10px; }
+    </style></head><body>
+      <div class="header"><h1>BoothIQ Quote</h1><p>Generated: ${new Date().toLocaleDateString()}</p></div>
+      
+      <div class="estimate-section">
+        <div class="tier-badge aggressive">AGGRESSIVE</div>
+        <h2>Aggressive Estimate</h2>
+        <div class="line-item"><span>Materials</span><span>$${estimates.aggressive.materials.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span></div>
+        <div class="line-item"><span>Design & PM</span><span>$${estimates.aggressive.designPM.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span></div>
+        <div class="line-item"><span>Install & Dismantle</span><span>$${estimates.aggressive.installDismantle.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span></div>
+        <div class="line-item"><span>Logistics</span><span>$${estimates.aggressive.logistics.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span></div>
+        <div class="total-line"><span>TOTAL</span><span>$${estimates.aggressive.total.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span></div>
+      </div>
+
+      <div class="estimate-section">
+        <div class="tier-badge middle">MIDDLE (RECOMMENDED)</div>
+        <h2>Middle Estimate</h2>
+        <div class="line-item"><span>Materials</span><span>$${estimates.middle.materials.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span></div>
+        <div class="line-item"><span>Design & PM</span><span>$${estimates.middle.designPM.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span></div>
+        <div class="line-item"><span>Install & Dismantle</span><span>$${estimates.middle.installDismantle.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span></div>
+        <div class="line-item"><span>Logistics</span><span>$${estimates.middle.logistics.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span></div>
+        <div class="line-item"><span>Contingency</span><span>$${estimates.middle.contingency.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span></div>
+        <div class="total-line"><span>TOTAL</span><span>$${estimates.middle.total.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span></div>
+      </div>
+
+      <div class="estimate-section">
+        <div class="tier-badge conservative">CONSERVATIVE</div>
+        <h2>Conservative Estimate</h2>
+        <div class="line-item"><span>Materials</span><span>$${estimates.conservative.materials.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span></div>
+        <div class="line-item"><span>Design & PM</span><span>$${estimates.conservative.designPM.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span></div>
+        <div class="line-item"><span>Install & Dismantle</span><span>$${estimates.conservative.installDismantle.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span></div>
+        <div class="line-item"><span>Logistics</span><span>$${estimates.conservative.logistics.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span></div>
+        <div class="line-item"><span>Contingency</span><span>$${estimates.conservative.contingency.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span></div>
+        <div class="total-line"><span>TOTAL</span><span>$${estimates.conservative.total.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span></div>
+      </div>
+    </body></html>`;
+
+    const blob = new Blob([quoteHTML], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `boothiq-quote-${new Date().toISOString().split('T')[0]}.html`;
+    link.click();
+  };
+
+  return (
+    <div className="container">
+      <div className="card">
+        <div className="header">
+          <h1>BoothIQ</h1>
+          <p>Quick booth cost estimation from renderings</p>
+        </div>
+
+        {error && <div className="error">{error}</div>}
+
+        <div className="form-group">
+          <label className="form-label">Location</label>
+          <select
+            value={location}
+            onChange={(e) => {
+              setLocation(e.target.value);
+              if (components) {
+                const calcs = calculateEstimates(components, e.target.value);
+                setEstimates(calcs);
+              }
+            }}
+          >
+            <option value="toronto">Toronto</option>
+            <option value="montreal">Montreal</option>
+            <option value="usa">USA</option>
+          </select>
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Quick Templates</label>
+          <div className="template-grid">
+            {Object.entries(BOOTH_TEMPLATES).map(([key, template]) => (
+              <button
+                key={key}
+                className={`template-btn ${selectedTemplate === key ? 'active' : ''}`}
+                onClick={() => handleTemplateSelect(key)}
+              >
+                {template.name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="divider">
+          <label className="form-label">Or Upload Rendering</label>
+          <div
+            className={`upload-zone ${dragging ? 'dragging' : ''}`}
+            onClick={() => fileInputRef.current?.click()}
+            onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragging(false);
+              if (e.dataTransfer.files[0]) handleImageUpload(e.dataTransfer.files[0]);
+            }}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={(e) => e.target.files[0] && handleImageUpload(e.target.files[0])}
+              style={{ display: 'none' }}
+            />
+            {analyzing ? (
+              <div className="loading">
+                <div className="spinner"></div>
+                <p>Analyzing rendering...</p>
+              </div>
+            ) : (
+              <>
+                <p>Drop rendering here or click to upload</p>
+                <p>JPG, PNG or other image format</p>
+              </>
+            )}
+          </div>
+        </div>
+
+        {uploadedImage && (
+          <div className="divider">
+            <label className="form-label">Uploaded Image</label>
+            <img src={uploadedImage} alt="Booth rendering" className="preview-img" />
+          </div>
+        )}
+
+        {estimates ? (
+          <div>
+            <div className="estimates-grid">
+              {[
+                { tier: 'aggressive', label: 'Aggressive (Budget)', class: 'aggressive' },
+                { tier: 'middle', label: 'Middle (Recommended)', class: 'middle' },
+                { tier: 'conservative', label: 'Conservative (Premium)', class: 'conservative' }
+              ].map(({ tier, label, class: className }) => (
+                <div key={tier} className={`estimate-card ${className}`}>
+                  <h3>{label}</h3>
+                  <div className="line-item">
+                    <span className="line-item-label">Materials</span>
+                    <span className="line-item-amount">${estimates[tier].materials.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+                  </div>
+                  <div className="line-item">
+                    <span className="line-item-label">Design & PM</span>
+                    <span className="line-item-amount">${estimates[tier].designPM.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+                  </div>
+                  <div className="line-item">
+                    <span className="line-item-label">I&D Labor</span>
+                    <span className="line-item-amount">${estimates[tier].installDismantle.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+                  </div>
+                  <div className="line-item">
+                    <span className="line-item-label">Logistics</span>
+                    <span className="line-item-amount">${estimates[tier].logistics.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+                  </div>
+                  {estimates[tier].contingency > 0 && (
+                    <div className="line-item">
+                      <span className="line-item-label">Contingency</span>
+                      <span className="line-item-amount">${estimates[tier].contingency.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+                    </div>
+                  )}
+                  <div className="total-line">
+                    <span>TOTAL</span>
+                    <span>${estimates[tier].total.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button className="btn" onClick={downloadQuote}>📥 Download Quote as HTML</button>
+          </div>
+        ) : (
+          <div className="empty-state">
+            <p>Select a template or upload a rendering to generate estimates</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.render(<BoothIQ />, document.getElementById('root'));
+  </script>
+</body>
+</html>
