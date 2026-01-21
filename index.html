@@ -217,6 +217,9 @@
         setEstimates(calcs);
       };
 
+      // Cloudflare Worker URL - replace with your deployed Worker URL
+      const WORKER_URL = 'https://boothiq-proxy.YOUR_SUBDOMAIN.workers.dev';
+
       const analyzeWithClaude = async (imageBase64 = null, pdfTextContent = '') => {
         try {
           const content = [];
@@ -229,10 +232,10 @@
           }
 
           if (pdfTextContent) {
-            const prompt = imageBase64 
+            const prompt = imageBase64
               ? `You have a booth rendering image and the following PDF parts list. Combine both to extract component details.`
               : `Extract booth component details from this parts list PDF text.`;
-            
+
             content.push({
               type: 'text',
               text: `${prompt}\n\nPDF Content:\n${pdfTextContent}\n\nReturn ONLY valid JSON: {wallSqft: number, floorSqft: number, wallType: "paintedMDF"|"oakWood"|"complexMillwork", floorType: "standardCarpet"|"printedVinyl"|"gFloorNew"|"astroTurf", graphics: "modest"|"moderate"|"premium"|"extensive", graphicsEstimate: number}. No markdown, no explanation.`
@@ -244,14 +247,13 @@
             });
           }
 
-          const response = await fetch('https://api.anthropic.com/v1/messages', {
+          // Route through Cloudflare Worker (API key and SKILL.md handled server-side)
+          const response = await fetch(WORKER_URL, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-              model: 'claude-sonnet-4-20250514',
-              max_tokens: 1024,
               messages: [
                 {
                   role: 'user',
@@ -261,7 +263,10 @@
             })
           });
 
-          if (!response.ok) throw new Error('Claude API failed');
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || 'Worker API failed');
+          }
           const data = await response.json();
           return JSON.parse(data.content[0].text);
         } catch (err) {
