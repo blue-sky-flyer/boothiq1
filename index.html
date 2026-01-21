@@ -209,12 +209,61 @@
         }, {});
       };
 
-      const handleTemplateSelect = (templateKey) => {
+      const handleTemplateSelect = async (templateKey) => {
         setSelectedTemplate(templateKey);
         const template = BOOTH_TEMPLATES[templateKey];
         setComponents(template);
-        const calcs = calculateEstimates(template, location);
-        setEstimates(calcs);
+
+        // Quick local estimate for immediate feedback
+        const localCalcs = calculateEstimates(template, location);
+        setEstimates(localCalcs);
+
+        // Then call Worker for accurate Claude-powered quote
+        setAnalyzing(true);
+        setError('');
+        try {
+          const wallTypeNames = {
+            paintedMDF: 'painted MDF',
+            oakWood: 'oak wood',
+            complexMillwork: 'complex millwork'
+          };
+          const floorTypeNames = {
+            standardCarpet: 'standard carpet',
+            printedVinyl: 'printed vinyl',
+            gFloorNew: 'G-Floor (new)',
+            astroTurf: 'astro turf'
+          };
+
+          const prompt = `Generate a quote for a ${template.name} in ${location === 'toronto' ? 'Toronto' : location === 'montreal' ? 'Montreal' : 'USA'}.
+
+Specifications:
+- Walls: ${template.wallSqft} sqft of ${wallTypeNames[template.wallType] || template.wallType}
+- Flooring: ${template.floorSqft} sqft of ${floorTypeNames[template.floorType] || template.floorType}
+- Graphics level: ${template.graphics}
+- Furniture level: ${template.furniture || 'moderate'}
+
+Use your calibrated pricing and service ratios. Return the quote in your standard format.`;
+
+          const response = await fetch(WORKER_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              messages: [{ role: 'user', content: prompt }]
+            })
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            console.log('Claude quote:', data.content[0].text);
+            // For now, keep using local estimates but log Claude's response
+            // Future: parse Claude's response and display it
+          }
+        } catch (err) {
+          console.error('Worker call failed:', err);
+          // Silently fail - local estimates already shown
+        } finally {
+          setAnalyzing(false);
+        }
       };
 
       // Cloudflare Worker URL - replace with your deployed Worker URL
@@ -279,24 +328,34 @@
 
         setError('');
         setAnalyzing(true);
-        setUploadedImage(URL.createObjectURL(file));
+        const imageUrl = URL.createObjectURL(file);
+        setUploadedImage(imageUrl);
 
         try {
-          const reader = new FileReader();
-          reader.onload = async (event) => {
-            const base64 = event.target.result.split(',')[1];
-            if (!base64) throw new Error('Failed to read image');
+          // Convert file to base64 using Promise wrapper
+          const base64 = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              const result = event.target.result;
+              if (!result) {
+                reject(new Error('Failed to read image'));
+                return;
+              }
+              const base64Data = result.split(',')[1];
+              resolve(base64Data);
+            };
+            reader.onerror = () => reject(new Error('Failed to read file'));
+            reader.readAsDataURL(file);
+          });
 
-            const extracted = await analyzeWithClaude(base64, pdfText);
-            setComponents(extracted);
-            
-            const calcs = calculateEstimates(extracted, location);
-            setEstimates(calcs);
-          };
-          reader.readAsDataURL(file);
+          const extracted = await analyzeWithClaude(base64, pdfText);
+          setComponents(extracted);
+
+          const calcs = calculateEstimates(extracted, location);
+          setEstimates(calcs);
         } catch (err) {
           setError('Error analyzing rendering: ' + err.message);
-          setUploadedImage(null);
+          // Don't clear the image - user can still see what they uploaded
         } finally {
           setAnalyzing(false);
         }
