@@ -97,8 +97,36 @@ export default {
       const body = await request.json();
 
       // Build Gemini request with structured output
+      const model = body.model || 'gemini-2.5-flash';
+      const isGemini3 = model.startsWith('gemini-3');
+
+      // For Gemini 3, don't use structured output (causes precision bugs)
+      // Instead, ask for JSON in the user message
+      let messages = body.messages;
+      if (isGemini3) {
+        // Append JSON format instructions to the last user message
+        const lastMsgIndex = messages.length - 1;
+        const jsonInstructions = `\n\nIMPORTANT: Return ONLY a valid JSON object with these exact fields:
+{
+  "project_type": "toronto_standard" | "toronto_festival" | "outoftown" | "fabrication_only",
+  "materials": { "walls": number, "flooring": number, "graphics": number, "av_lighting": number, "furniture": number, "other": number, "subtotal": number },
+  "services": { "design_pm": number, "design_pm_percent": number, "install_dismantle": number, "install_dismantle_percent": number, "logistics": number, "logistics_percent": number, "subtotal": number },
+  "contingency": number,
+  "subtotal_before_tax": number,
+  "tax_rate": number,
+  "tax_amount": number,
+  "total": number,
+  "confidence": "high" | "medium" | "low",
+  "notes": ["string", ...]
+}
+Use whole numbers for dollar amounts. No markdown, no explanation, just the JSON.`;
+        messages = messages.map((msg, i) =>
+          i === lastMsgIndex ? { ...msg, content: msg.content + jsonInstructions } : msg
+        );
+      }
+
       const geminiRequest = {
-        contents: body.messages.map(msg => ({
+        contents: messages.map(msg => ({
           role: msg.role === 'assistant' ? 'model' : 'user',
           parts: [{ text: msg.content }]
         })),
@@ -106,15 +134,15 @@ export default {
           parts: [{ text: systemInstruction }]
         },
         generationConfig: {
-          responseMimeType: 'application/json',
-          responseSchema: QUOTE_SCHEMA,
+          // Only use structured output for non-Gemini-3 models
+          ...(isGemini3 ? {} : { responseMimeType: 'application/json', responseSchema: QUOTE_SCHEMA }),
           temperature: 0.1,
-          maxOutputTokens: 4096
+          maxOutputTokens: 4096,
+          ...(isGemini3 && { thinkingConfig: { thinkingLevel: 'LOW' } })
         }
       };
 
       // Call Gemini API
-      const model = body.model || 'gemini-2.5-flash';
       const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${env.GOOGLE_API_KEY}`,
         {
@@ -138,8 +166,29 @@ export default {
         throw new Error('No content in Gemini response');
       }
 
-      // Parse and return the structured JSON
-      const quote = JSON.parse(textContent);
+      // Try to clean and parse the JSON - Gemini 3 sometimes includes extra content
+      let cleanedText = textContent.trim();
+
+      // Remove any markdown code fences if present
+      if (cleanedText.startsWith('```json')) {
+        cleanedText = cleanedText.slice(7);
+      } else if (cleanedText.startsWith('```')) {
+        cleanedText = cleanedText.slice(3);
+      }
+      if (cleanedText.endsWith('```')) {
+        cleanedText = cleanedText.slice(0, -3);
+      }
+      cleanedText = cleanedText.trim();
+
+      // Find the JSON object boundaries
+      const jsonStart = cleanedText.indexOf('{');
+      const jsonEnd = cleanedText.lastIndexOf('}');
+      if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+        cleanedText = cleanedText.slice(jsonStart, jsonEnd + 1);
+      }
+
+      // Parse the structured JSON
+      const quote = JSON.parse(cleanedText);
 
       return new Response(JSON.stringify({
         quote,
