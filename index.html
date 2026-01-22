@@ -616,7 +616,7 @@
   <script type="text/babel">
     // PDF.js is optional - app works without it (just no PDF upload)
     if (typeof pdfjsLib !== 'undefined') {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.min.js';
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.worker.min.js';
     }
 
     // Cloudflare Worker URLs - handle API keys and SKILL.md server-side
