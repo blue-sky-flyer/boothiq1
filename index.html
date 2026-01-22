@@ -4,85 +4,610 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BoothIQ - Professional Booth Estimation</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎪</text></svg>">
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.min.js"></script>
   <style>
+    /* Apple-inspired design system */
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif; background: #f9fafb; line-height: 1.5; }
-    .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
-    .card { background: white; border-radius: 8px; padding: 40px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-    .header { margin-bottom: 30px; border-bottom: 3px solid #2563eb; padding-bottom: 20px; }
-    .header h1 { color: #1f2937; font-size: 32px; margin-bottom: 10px; }
-    .header p { color: #6b7280; font-size: 16px; }
-    .form-group { margin-bottom: 30px; }
-    .form-label { display: block; margin-bottom: 8px; font-weight: 600; color: #374151; }
-    select, input[type="number"] { width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; }
-    input[type="range"] { width: 100%; height: 6px; }
-    .dimensions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-    .toggle-group { display: flex; gap: 10px; }
-    .toggle-btn { padding: 10px 16px; border: 2px solid #d1d5db; border-radius: 6px; background: white; cursor: pointer; font-size: 14px; font-weight: 500; color: #374151; transition: all 0.2s; }
-    .toggle-btn:hover { border-color: #9ca3af; }
-    .toggle-btn.active { border-color: #2563eb; background: #eff6ff; color: #2563eb; font-weight: 600; }
-    .duration-buttons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-    .three-state-toggle { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-    .three-state-toggle .toggle-btn { width: 100%; padding: 10px; }
-    .upload-zone { border: 2px dashed #d1d5db; border-radius: 8px; padding: 40px; text-align: center; cursor: pointer; background: #fafafa; transition: all 0.2s; }
-    .upload-zone:hover { background: #f3f4f6; border-color: #9ca3af; }
-    .upload-zone.dragging { background: #f0f0f0; border-color: #2563eb; }
-    .upload-zone p { margin: 0; color: #6b7280; }
-    .upload-zone p:first-child { font-weight: 500; color: #374151; margin-bottom: 8px; }
-    .error { background: #fee2e2; border: 1px solid #fca5a5; border-radius: 6px; padding: 12px; margin-bottom: 20px; color: #991b1b; }
-    .loading { text-align: center; padding: 40px; }
-    .spinner { display: inline-block; width: 32px; height: 32px; border: 3px solid #e5e7eb; border-top-color: #2563eb; border-radius: 50%; animation: spin 1s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .estimates-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin: 20px 0; }
-    .estimate-card { border: 2px solid; border-radius: 8px; padding: 20px; }
-    .estimate-card.aggressive { border-color: #991b1b; background: #fee2e2; }
-    .estimate-card.middle { border-color: #92400e; background: #fef3c7; }
-    .estimate-card.conservative { border-color: #0c2d6b; background: #dbeafe; }
-    .estimate-card h3 { margin-bottom: 15px; font-size: 16px; font-weight: 600; border-bottom: 2px solid; padding-bottom: 10px; }
-    .estimate-card.aggressive h3 { color: #991b1b; border-bottom-color: #991b1b; }
-    .estimate-card.middle h3 { color: #92400e; border-bottom-color: #92400e; }
-    .estimate-card.conservative h3 { color: #0c2d6b; border-bottom-color: #0c2d6b; }
-    .line-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(0,0,0,0.1); font-size: 14px; }
-    .line-item-label { color: #374151; }
-    .line-item-amount { font-weight: 600; color: #1f2937; }
-    .total-line { display: flex; justify-content: space-between; padding: 12px 0; border-top: 2px solid; margin-top: 10px; font-size: 18px; font-weight: bold; }
-    .estimate-card.aggressive .total-line { border-top-color: #991b1b; color: #991b1b; }
-    .estimate-card.middle .total-line { border-top-color: #92400e; color: #92400e; }
-    .estimate-card.conservative .total-line { border-top-color: #0c2d6b; color: #0c2d6b; }
-    .btn { width: 100%; padding: 12px; background: #2563eb; color: white; border: none; border-radius: 6px; font-size: 16px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
-    .btn:hover { background: #1d4ed8; }
-    .divider { padding-bottom: 30px; margin-bottom: 30px; border-bottom: 1px solid #e5e7eb; }
-    .preview-img { max-width: 100%; border-radius: 6px; max-height: 300px; margin: 15px 0; }
-    .pdf-badge { display: inline-flex; align-items: center; gap: 10px; padding: 12px; background: #f3f4f6; border-radius: 6px; color: #374151; margin: 15px 0; }
-    .empty-state { text-align: center; color: #9ca3af; padding: 40px; }
-    .section-title { font-size: 14px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 20px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; }
-    .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
-    .btn-ai { background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%); margin-top: 20px; }
-    .btn-ai:hover { background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%); }
-    .btn-ai:disabled { background: #9ca3af; cursor: not-allowed; }
-    .ai-quote-section { margin-top: 30px; padding: 25px; background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%); border: 2px solid #8b5cf6; border-radius: 12px; }
-    .ai-quote-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-    .ai-quote-header h3 { color: #5b21b6; margin: 0; font-size: 18px; }
-    .ai-badge { background: #8b5cf6; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
-    .ai-quote-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-    .ai-quote-card { background: white; border-radius: 8px; padding: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-    .ai-quote-card h4 { margin: 0 0 12px 0; color: #374151; font-size: 14px; border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; }
-    .ai-line-item { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; }
-    .ai-line-item.subtotal { border-top: 1px solid #e5e7eb; margin-top: 8px; padding-top: 8px; font-weight: 600; }
-    .ai-total-section { grid-column: 1 / -1; background: white; border-radius: 8px; padding: 20px; text-align: center; }
-    .ai-total { font-size: 36px; font-weight: 700; color: #5b21b6; }
-    .ai-confidence { margin-top: 10px; font-size: 14px; }
-    .ai-confidence.high { color: #059669; }
-    .ai-confidence.medium { color: #d97706; }
-    .ai-confidence.low { color: #dc2626; }
-    .ai-notes { grid-column: 1 / -1; background: #fefce8; border: 1px solid #fde047; border-radius: 8px; padding: 15px; font-size: 13px; }
-    .ai-notes h4 { margin: 0 0 10px 0; color: #854d0e; }
-    .ai-notes ul { margin: 0; padding-left: 20px; color: #713f12; }
-    @media (max-width: 768px) { .ai-quote-grid { grid-template-columns: 1fr; } }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f7;
+      color: #1d1d1f;
+      line-height: 1.47059;
+      letter-spacing: -0.022em;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 60px 20px;
+    }
+
+    /* Header - minimal, centered */
+    .header {
+      text-align: center;
+      margin-bottom: 48px;
+    }
+    .header h1 {
+      font-size: 48px;
+      font-weight: 600;
+      letter-spacing: -0.003em;
+      margin-bottom: 8px;
+      background: linear-gradient(135deg, #1d1d1f 0%, #515154 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .header p {
+      font-size: 21px;
+      color: #86868b;
+      font-weight: 400;
+    }
+
+    /* Cards with subtle depth */
+    .card {
+      background: #ffffff;
+      border-radius: 18px;
+      padding: 40px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+      margin-bottom: 24px;
+    }
+
+    .card-header {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 24px;
+      color: #1d1d1f;
+    }
+
+    /* Form elements - Apple style */
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+    }
+
+    .form-group {
+      margin-bottom: 0;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: #86868b;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 8px;
+    }
+
+    select, input[type="number"] {
+      width: 100%;
+      padding: 14px 16px;
+      border: 1px solid #d2d2d7;
+      border-radius: 12px;
+      font-size: 17px;
+      font-family: inherit;
+      background: #ffffff;
+      color: #1d1d1f;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+
+    select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2386868b' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 16px center;
+      padding-right: 40px;
+    }
+
+    select:focus, input[type="number"]:focus {
+      outline: none;
+      border-color: #0071e3;
+      box-shadow: 0 0 0 4px rgba(0,113,227,0.1);
+    }
+
+    /* Segmented controls */
+    .segment-control {
+      display: flex;
+      background: #f5f5f7;
+      border-radius: 10px;
+      padding: 3px;
+      gap: 0;
+    }
+
+    .segment-btn {
+      flex: 1;
+      padding: 10px 16px;
+      border: none;
+      background: transparent;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      color: #86868b;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-family: inherit;
+    }
+
+    .segment-btn:hover {
+      color: #1d1d1f;
+    }
+
+    .segment-btn.active {
+      background: #ffffff;
+      color: #1d1d1f;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    /* Duration pills */
+    .duration-pills {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .pill-btn {
+      padding: 10px 20px;
+      border: 1px solid #d2d2d7;
+      background: #ffffff;
+      border-radius: 980px;
+      font-size: 14px;
+      font-weight: 500;
+      color: #1d1d1f;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-family: inherit;
+    }
+
+    .pill-btn:hover {
+      border-color: #86868b;
+    }
+
+    .pill-btn.active {
+      background: #1d1d1f;
+      border-color: #1d1d1f;
+      color: #ffffff;
+    }
+
+    /* Dimensions grid */
+    .dimensions-grid {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 12px;
+      align-items: end;
+    }
+
+    .dimensions-x {
+      font-size: 24px;
+      color: #86868b;
+      text-align: center;
+      padding-bottom: 14px;
+    }
+
+    /* Upload zone */
+    .upload-zone {
+      border: 2px dashed #d2d2d7;
+      border-radius: 18px;
+      padding: 48px;
+      text-align: center;
+      cursor: pointer;
+      background: #fafafa;
+      transition: all 0.2s ease;
+    }
+
+    .upload-zone:hover {
+      border-color: #86868b;
+      background: #f5f5f7;
+    }
+
+    .upload-zone.dragging {
+      border-color: #0071e3;
+      background: rgba(0,113,227,0.04);
+    }
+
+    .upload-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+      opacity: 0.6;
+    }
+
+    .upload-zone p {
+      margin: 0;
+      color: #86868b;
+      font-size: 14px;
+    }
+
+    .upload-zone p:first-of-type {
+      font-size: 17px;
+      font-weight: 500;
+      color: #1d1d1f;
+      margin-bottom: 4px;
+    }
+
+    /* Primary CTA - Apple blue */
+    .btn-primary {
+      width: 100%;
+      padding: 18px 32px;
+      background: #0071e3;
+      color: #ffffff;
+      border: none;
+      border-radius: 14px;
+      font-size: 17px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-family: inherit;
+      letter-spacing: -0.022em;
+    }
+
+    .btn-primary:hover {
+      background: #0077ed;
+    }
+
+    .btn-primary:active {
+      transform: scale(0.98);
+    }
+
+    .btn-primary:disabled {
+      background: #d2d2d7;
+      cursor: not-allowed;
+    }
+
+    /* Secondary button */
+    .btn-secondary {
+      width: 100%;
+      padding: 14px 24px;
+      background: transparent;
+      color: #0071e3;
+      border: none;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-family: inherit;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(0,113,227,0.08);
+    }
+
+    /* AI Quote result - hero display */
+    .quote-result {
+      text-align: center;
+      padding: 48px 32px;
+    }
+
+    .quote-badge {
+      display: inline-block;
+      padding: 6px 16px;
+      background: #f5f5f7;
+      border-radius: 980px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #86868b;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 16px;
+    }
+
+    .quote-badge.ai {
+      background: linear-gradient(135deg, #5e5ce6 0%, #bf5af2 100%);
+      color: #ffffff;
+    }
+
+    .quote-total {
+      font-size: 72px;
+      font-weight: 600;
+      letter-spacing: -0.03em;
+      color: #1d1d1f;
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+
+    .quote-label {
+      font-size: 17px;
+      color: #86868b;
+      margin-bottom: 24px;
+    }
+
+    .confidence-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border-radius: 980px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .confidence-badge.high {
+      background: rgba(52,199,89,0.12);
+      color: #248a3d;
+    }
+
+    .confidence-badge.medium {
+      background: rgba(255,159,10,0.12);
+      color: #b25000;
+    }
+
+    .confidence-badge.low {
+      background: rgba(255,59,48,0.12);
+      color: #d70015;
+    }
+
+    /* Breakdown sections */
+    .breakdown-section {
+      border-top: 1px solid #e8e8ed;
+      padding-top: 32px;
+      margin-top: 32px;
+    }
+
+    .breakdown-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+
+    @media (max-width: 640px) {
+      .breakdown-grid { grid-template-columns: 1fr; }
+    }
+
+    .breakdown-card {
+      background: #f5f5f7;
+      border-radius: 14px;
+      padding: 20px;
+    }
+
+    .breakdown-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: #86868b;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 16px;
+    }
+
+    .breakdown-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      font-size: 15px;
+    }
+
+    .breakdown-item-label {
+      color: #86868b;
+    }
+
+    .breakdown-item-value {
+      font-weight: 500;
+      color: #1d1d1f;
+    }
+
+    .breakdown-subtotal {
+      border-top: 1px solid #d2d2d7;
+      margin-top: 8px;
+      padding-top: 12px;
+    }
+
+    .breakdown-subtotal .breakdown-item-label,
+    .breakdown-subtotal .breakdown-item-value {
+      color: #1d1d1f;
+      font-weight: 600;
+    }
+
+    /* Summary row */
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 16px 0;
+      font-size: 17px;
+      border-top: 1px solid #e8e8ed;
+    }
+
+    .summary-row:first-child {
+      border-top: none;
+    }
+
+    .summary-row.total {
+      font-size: 21px;
+      font-weight: 600;
+    }
+
+    /* Notes section */
+    .notes-section {
+      background: #fffbeb;
+      border-radius: 14px;
+      padding: 20px;
+      margin-top: 24px;
+    }
+
+    .notes-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #92400e;
+      margin-bottom: 12px;
+    }
+
+    .notes-list {
+      margin: 0;
+      padding-left: 20px;
+      font-size: 14px;
+      color: #78350f;
+    }
+
+    .notes-list li {
+      margin-bottom: 6px;
+    }
+
+    /* Collapsible section */
+    .collapsible-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 0;
+      cursor: pointer;
+      border-top: 1px solid #e8e8ed;
+    }
+
+    .collapsible-header h3 {
+      font-size: 17px;
+      font-weight: 600;
+      color: #1d1d1f;
+    }
+
+    .collapsible-toggle {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #f5f5f7;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      color: #86868b;
+      transition: transform 0.2s ease;
+    }
+
+    .collapsible-toggle.open {
+      transform: rotate(180deg);
+    }
+
+    .collapsible-content {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease;
+    }
+
+    .collapsible-content.open {
+      max-height: 2000px;
+    }
+
+    /* Template estimates (secondary) */
+    .template-estimates {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      padding-bottom: 24px;
+    }
+
+    @media (max-width: 768px) {
+      .template-estimates { grid-template-columns: 1fr; }
+    }
+
+    .template-card {
+      background: #f5f5f7;
+      border-radius: 14px;
+      padding: 20px;
+    }
+
+    .template-card.budget { border-left: 4px solid #ff3b30; }
+    .template-card.standard { border-left: 4px solid #ff9500; }
+    .template-card.premium { border-left: 4px solid #007aff; }
+
+    .template-tier {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 4px;
+    }
+
+    .template-card.budget .template-tier { color: #ff3b30; }
+    .template-card.standard .template-tier { color: #ff9500; }
+    .template-card.premium .template-tier { color: #007aff; }
+
+    .template-total {
+      font-size: 28px;
+      font-weight: 600;
+      color: #1d1d1f;
+    }
+
+    /* Error state */
+    .error-banner {
+      background: rgba(255,59,48,0.08);
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 24px;
+      font-size: 15px;
+      color: #d70015;
+    }
+
+    /* Loading state */
+    .loading-state {
+      text-align: center;
+      padding: 48px;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid #e8e8ed;
+      border-top-color: #0071e3;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 16px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loading-text {
+      color: #86868b;
+      font-size: 15px;
+    }
+
+    /* Preview images */
+    .preview-img {
+      max-width: 100%;
+      border-radius: 14px;
+      margin-top: 16px;
+    }
+
+    .pdf-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      background: #f5f5f7;
+      border-radius: 10px;
+      font-size: 14px;
+      color: #1d1d1f;
+      margin-top: 16px;
+    }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      padding: 64px 32px;
+      color: #86868b;
+    }
+
+    .empty-state-icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+
+    /* Responsive */
+    @media (max-width: 640px) {
+      .container { padding: 40px 16px; }
+      .card { padding: 24px; border-radius: 14px; }
+      .header h1 { font-size: 34px; }
+      .header p { font-size: 17px; }
+      .quote-total { font-size: 48px; }
+      .form-grid { gap: 16px; }
+      .dimensions-grid { grid-template-columns: 1fr; gap: 8px; }
+      .dimensions-x { display: none; }
+    }
   </style>
 </head>
 <body>
@@ -96,7 +621,7 @@
 
     // Cloudflare Worker URLs - handle API keys and SKILL.md server-side
     const CLAUDE_WORKER_URL = 'https://boothiq-proxy.raj-lucia001.workers.dev';
-    const GEMINI_WORKER_URL = 'https://boothiq-gemini.raj-lucia001.workers.dev'; // Deploy with: wrangler deploy -c wrangler-gemini.toml
+    const GEMINI_WORKER_URL = 'https://boothiq-gemini.raj-lucia001.workers.dev';
 
     const DURATION_OPTIONS = [1, 3, 7, 30];
 
@@ -132,12 +657,11 @@
       const [dragging, setDragging] = React.useState(false);
       const [aiQuote, setAiQuote] = React.useState(null);
       const [loadingAiQuote, setLoadingAiQuote] = React.useState(false);
+      const [showTemplates, setShowTemplates] = React.useState(false);
 
       const calculateBoothSpecs = () => {
         const w = parseFloat(width) || 0;
         const l = parseFloat(length) || 0;
-        
-        // Calculate wall sqft (perimeter × 10ft height assumed)
         const perimeter = (w + l) * 2;
         const wallSqft = perimeter * 10;
         const floorSqft = w * l;
@@ -153,7 +677,7 @@
 
       const extractPdfText = async (file) => {
         if (typeof pdfjsLib === 'undefined') {
-          throw new Error('PDF support unavailable - try disabling ad blocker or upload an image instead');
+          throw new Error('PDF support unavailable - try uploading an image instead');
         }
         try {
           const arrayBuffer = await file.arrayBuffer();
@@ -183,17 +707,17 @@
           astroTurf: 16.92
         };
         cost += (comps.floorSqft || 0) * (floorPrices[comps.floorType] || 5.50);
-        
+
         const graphicsPrices = { modest: 12, moderate: 25, premium: 45, extensive: 60 };
         cost += (comps.graphicsEstimate || 100) * (graphicsPrices[comps.graphics] || 25);
-        
+
         return cost;
       };
 
       const calculateEstimates = (comps, loc, dur, env, ground) => {
         const materials = calculateMaterials(comps);
         const subtotal = materials;
-        
+
         const serviceRates = {
           toronto: { designPM: 0.09, installDismantle: 0.14, logistics: 0.05 },
           montreal: { designPM: 0.12, installDismantle: 0.36, logistics: 0.12 },
@@ -201,22 +725,12 @@
         };
 
         const rates = serviceRates[loc] || serviceRates.toronto;
-        
-        // Duration multiplier: longer use = lower per-day cost
-        const durationMultipliers = {
-          1: 1.0,
-          3: 0.82,
-          7: 0.60,
-          30: 0.65
-        };
+
+        const durationMultipliers = { 1: 1.0, 3: 0.82, 7: 0.60, 30: 0.65 };
         const durationMult = durationMultipliers[dur] || 0.95;
-
-        // Outdoor multiplier (outdoor = more setup/breakdown labor)
         const outdoorMult = env === 'outdoor' ? 1.15 : 1.0;
-
-        // Ground level multiplier (uneven = more labor)
         const groundMultiplier = ground === 'no' ? 1.20 : ground === 'yes' ? 1.0 : 1.08;
-        
+
         const estimates = {
           aggressive: {
             materials: materials * 0.85,
@@ -273,15 +787,11 @@
             promptText = 'Analyze booth rendering and return JSON: {wallSqft: number, floorSqft: number, wallType: "paintedMDF"|"oakWood"|"complexMillwork", floorType: "standardCarpet"|"printedVinyl"|"gFloorNew"|"astroTurf", graphics: "modest"|"moderate"|"premium"|"extensive", graphicsEstimate: number}. Return ONLY valid JSON, no markdown or explanation.';
           }
 
-          // Route through Cloudflare Worker (handles API key server-side)
           const response = await fetch(CLAUDE_WORKER_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              messages: [{
-                role: 'user',
-                content: promptText
-              }]
+              messages: [{ role: 'user', content: promptText }]
             })
           });
 
@@ -301,7 +811,6 @@
         setAiQuote(null);
 
         try {
-          // Build the prompt with all current specs
           const specs = {
             width: parseFloat(width) || 10,
             length: parseFloat(length) || 10,
@@ -331,7 +840,7 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               messages: [{ role: 'user', content: promptText }],
-              model: 'gemini-2.5-flash'
+              model: 'gemini-3-pro-preview'
             })
           });
 
@@ -341,7 +850,7 @@
           }
 
           const data = await response.json();
-          console.log('Gemini AI Quote:', data);
+          console.log('Gemini AI Quote:', JSON.stringify(data, null, 2));
           setAiQuote(data.quote);
 
         } catch (err) {
@@ -360,7 +869,6 @@
         setUploadedImage(URL.createObjectURL(file));
 
         try {
-          // Convert file to base64 using Promise wrapper
           const base64 = await new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = (event) => {
@@ -380,7 +888,6 @@
           updateEstimates(extracted);
         } catch (err) {
           setError('Error analyzing rendering: ' + err.message);
-          // Don't clear the image - user can still see what they uploaded
         } finally {
           setAnalyzing(false);
         }
@@ -420,66 +927,61 @@
         }
       };
 
-
+      const formatCurrency = (value) => {
+        return new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD',
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0
+        }).format(value || 0);
+      };
 
       const downloadQuote = () => {
-        if (!estimates) return;
+        if (!aiQuote) return;
 
         const quoteHTML = `<!DOCTYPE html><html><head><style>
-          body { font-family: Arial, sans-serif; max-width: 900px; margin: 0; padding: 20px; }
-          .header { text-align: center; border-bottom: 3px solid #2563eb; padding-bottom: 20px; }
-          .header h1 { margin: 0; color: #1f2937; }
-          .specs { background: #f3f4f6; padding: 15px; border-radius: 6px; margin: 20px 0; font-size: 14px; }
-          .specs div { padding: 5px 0; }
-          .estimate-section { margin: 30px 0; border: 2px solid #e5e7eb; border-radius: 8px; padding: 20px; }
-          .tier-badge { display: inline-block; padding: 4px 12px; border-radius: 4px; font-weight: bold; font-size: 12px; margin-bottom: 10px; }
-          .aggressive { background: #fee2e2; color: #991b1b; }
-          .middle { background: #fef3c7; color: #92400e; }
-          .conservative { background: #dbeafe; color: #0c2d6b; }
-          .line-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f3f4f6; }
-          .total-line { display: flex; justify-content: space-between; padding: 12px 0; border-top: 2px solid #1f2937; font-size: 18px; font-weight: bold; margin-top: 10px; }
+          body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 800px; margin: 0 auto; padding: 40px; color: #1d1d1f; }
+          .header { text-align: center; margin-bottom: 40px; }
+          .header h1 { font-size: 32px; margin: 0 0 8px 0; }
+          .header p { color: #86868b; margin: 0; }
+          .specs { background: #f5f5f7; padding: 20px; border-radius: 12px; margin: 24px 0; }
+          .total-section { text-align: center; padding: 32px; background: #f5f5f7; border-radius: 12px; margin: 24px 0; }
+          .total-amount { font-size: 48px; font-weight: 600; }
+          .section { margin: 24px 0; }
+          .section h3 { font-size: 14px; color: #86868b; text-transform: uppercase; margin-bottom: 12px; }
+          .line-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e8e8ed; }
         </style></head><body>
-          <div class="header"><h1>BoothIQ Quote</h1><p>Generated: ${new Date().toLocaleDateString()}</p></div>
-          
+          <div class="header">
+            <h1>BoothIQ Quote</h1>
+            <p>Generated: ${new Date().toLocaleDateString()}</p>
+          </div>
+
           <div class="specs">
-            <div><strong>Booth Dimensions:</strong> ${width}ft × ${length}ft</div>
-            <div><strong>Environment:</strong> ${indoor ? 'Indoor' : 'Outdoor'}</div>
-            <div><strong>Duration:</strong> ${duration} days</div>
-            <div><strong>Ground Level:</strong> ${groundLevel === 'yes' ? 'Yes' : groundLevel === 'no' ? 'No' : 'Not Sure'}</div>
-            <div><strong>Location:</strong> ${location.charAt(0).toUpperCase() + location.slice(1)}</div>
-          </div>
-          
-          <div class="estimate-section">
-            <div class="tier-badge aggressive">AGGRESSIVE</div>
-            <h2>Aggressive Estimate</h2>
-            <div class="line-item"><span>Materials</span><span>$${estimates.aggressive.materials.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span></div>
-            <div class="line-item"><span>Design & PM</span><span>$${estimates.aggressive.designPM.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span></div>
-            <div class="line-item"><span>Install & Dismantle</span><span>$${estimates.aggressive.installDismantle.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span></div>
-            <div class="line-item"><span>Logistics</span><span>$${estimates.aggressive.logistics.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span></div>
-            <div class="total-line"><span>TOTAL</span><span>$${estimates.aggressive.total.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span></div>
+            <strong>Specifications:</strong> ${width}ft × ${length}ft | ${location.charAt(0).toUpperCase() + location.slice(1)} | ${indoor ? 'Indoor' : 'Outdoor'} | ${duration} days
           </div>
 
-          <div class="estimate-section">
-            <div class="tier-badge middle">MIDDLE (RECOMMENDED)</div>
-            <h2>Middle Estimate</h2>
-            <div class="line-item"><span>Materials</span><span>$${estimates.middle.materials.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span></div>
-            <div class="line-item"><span>Design & PM</span><span>$${estimates.middle.designPM.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span></div>
-            <div class="line-item"><span>Install & Dismantle</span><span>$${estimates.middle.installDismantle.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span></div>
-            <div class="line-item"><span>Logistics</span><span>$${estimates.middle.logistics.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span></div>
-            <div class="line-item"><span>Contingency</span><span>$${estimates.middle.contingency.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span></div>
-            <div class="total-line"><span>TOTAL</span><span>$${estimates.middle.total.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span></div>
+          <div class="total-section">
+            <div class="total-amount">${formatCurrency(aiQuote.total)}</div>
+            <p>Total Estimate (incl. ${((aiQuote.tax_rate || 0) * 100).toFixed(2)}% tax)</p>
           </div>
 
-          <div class="estimate-section">
-            <div class="tier-badge conservative">CONSERVATIVE</div>
-            <h2>Conservative Estimate</h2>
-            <div class="line-item"><span>Materials</span><span>$${estimates.conservative.materials.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span></div>
-            <div class="line-item"><span>Design & PM</span><span>$${estimates.conservative.designPM.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span></div>
-            <div class="line-item"><span>Install & Dismantle</span><span>$${estimates.conservative.installDismantle.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span></div>
-            <div class="line-item"><span>Logistics</span><span>$${estimates.conservative.logistics.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span></div>
-            <div class="line-item"><span>Contingency</span><span>$${estimates.conservative.contingency.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span></div>
-            <div class="total-line"><span>TOTAL</span><span>$${estimates.conservative.total.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span></div>
+          <div class="section">
+            <h3>Materials - ${formatCurrency(aiQuote.materials?.subtotal)}</h3>
+            ${aiQuote.materials?.walls > 0 ? `<div class="line-item"><span>Walls/Fabrication</span><span>${formatCurrency(aiQuote.materials.walls)}</span></div>` : ''}
+            ${aiQuote.materials?.flooring > 0 ? `<div class="line-item"><span>Flooring</span><span>${formatCurrency(aiQuote.materials.flooring)}</span></div>` : ''}
+            ${aiQuote.materials?.graphics > 0 ? `<div class="line-item"><span>Graphics</span><span>${formatCurrency(aiQuote.materials.graphics)}</span></div>` : ''}
+            ${aiQuote.materials?.av_lighting > 0 ? `<div class="line-item"><span>AV & Lighting</span><span>${formatCurrency(aiQuote.materials.av_lighting)}</span></div>` : ''}
+            ${aiQuote.materials?.furniture > 0 ? `<div class="line-item"><span>Furniture</span><span>${formatCurrency(aiQuote.materials.furniture)}</span></div>` : ''}
           </div>
+
+          <div class="section">
+            <h3>Services - ${formatCurrency(aiQuote.services?.subtotal)}</h3>
+            <div class="line-item"><span>Design & PM</span><span>${formatCurrency(aiQuote.services?.design_pm)}</span></div>
+            <div class="line-item"><span>Install & Dismantle</span><span>${formatCurrency(aiQuote.services?.install_dismantle)}</span></div>
+            <div class="line-item"><span>Logistics</span><span>${formatCurrency(aiQuote.services?.logistics)}</span></div>
+          </div>
+
+          ${aiQuote.notes?.length > 0 ? `<div class="section"><h3>Notes</h3><ul>${aiQuote.notes.map(n => `<li>${n}</li>`).join('')}</ul></div>` : ''}
         </body></html>`;
 
         const blob = new Blob([quoteHTML], { type: 'text/html' });
@@ -492,21 +994,20 @@
 
       return (
         <div className="container">
+          {/* Header */}
+          <div className="header">
+            <h1>BoothIQ</h1>
+            <p>Professional booth estimation powered by AI</p>
+          </div>
+
+          {error && <div className="error-banner">{error}</div>}
+
+          {/* Input Card */}
           <div className="card">
-            <div className="header">
-              <h1>BoothIQ</h1>
-              <p>Quick booth cost estimation with custom specifications</p>
-            </div>
-
-            {error && <div className="error">{error}</div>}
-
-            <div className="form-row">
+            <div className="form-grid">
               <div className="form-group">
                 <label className="form-label">Location</label>
-                <select
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                >
+                <select value={location} onChange={(e) => setLocation(e.target.value)}>
                   <option value="toronto">Toronto</option>
                   <option value="montreal">Montreal</option>
                   <option value="usa">USA</option>
@@ -515,58 +1016,53 @@
 
               <div className="form-group">
                 <label className="form-label">Environment</label>
-                <div className="toggle-group">
+                <div className="segment-control">
                   <button
-                    className={`toggle-btn ${indoor ? 'active' : ''}`}
+                    className={`segment-btn ${indoor ? 'active' : ''}`}
                     onClick={() => setIndoor(true)}
                   >
-                    🏢 Indoor
+                    Indoor
                   </button>
                   <button
-                    className={`toggle-btn ${!indoor ? 'active' : ''}`}
+                    className={`segment-btn ${!indoor ? 'active' : ''}`}
                     onClick={() => setIndoor(false)}
                   >
-                    🌤️ Outdoor
+                    Outdoor
                   </button>
                 </div>
               </div>
             </div>
 
-            <div className="form-group">
+            <div className="form-group" style={{ marginTop: 24 }}>
               <label className="form-label">Booth Dimensions (feet)</label>
               <div className="dimensions-grid">
-                <div>
-                  <label style={{ fontSize: '12px', color: '#6b7280', marginBottom: '5px', display: 'block' }}>Width</label>
-                  <input
-                    type="number"
-                    value={width}
-                    onChange={(e) => setWidth(e.target.value)}
-                    min="1"
-                    step="0.5"
-                    placeholder="Width"
-                  />
-                </div>
-                <div>
-                  <label style={{ fontSize: '12px', color: '#6b7280', marginBottom: '5px', display: 'block' }}>Length</label>
-                  <input
-                    type="number"
-                    value={length}
-                    onChange={(e) => setLength(e.target.value)}
-                    min="1"
-                    step="0.5"
-                    placeholder="Length"
-                  />
-                </div>
+                <input
+                  type="number"
+                  value={width}
+                  onChange={(e) => setWidth(e.target.value)}
+                  min="1"
+                  step="0.5"
+                  placeholder="Width"
+                />
+                <span className="dimensions-x">×</span>
+                <input
+                  type="number"
+                  value={length}
+                  onChange={(e) => setLength(e.target.value)}
+                  min="1"
+                  step="0.5"
+                  placeholder="Length"
+                />
               </div>
             </div>
 
-            <div className="form-group">
-              <label className="form-label">Duration of Use</label>
-              <div className="duration-buttons">
+            <div className="form-group" style={{ marginTop: 24 }}>
+              <label className="form-label">Duration</label>
+              <div className="duration-pills">
                 {DURATION_OPTIONS.map((day) => (
                   <button
                     key={day}
-                    className={`toggle-btn ${duration === day ? 'active' : ''}`}
+                    className={`pill-btn ${duration === day ? 'active' : ''}`}
                     onClick={() => setDuration(day)}
                   >
                     {day} day{day !== 1 ? 's' : ''}
@@ -575,32 +1071,32 @@
               </div>
             </div>
 
-            <div className="form-group">
-              <label className="form-label">Is Ground Level?</label>
-              <div className="three-state-toggle">
+            <div className="form-group" style={{ marginTop: 24 }}>
+              <label className="form-label">Ground Level</label>
+              <div className="segment-control">
                 <button
-                  className={`toggle-btn ${groundLevel === 'yes' ? 'active' : ''}`}
+                  className={`segment-btn ${groundLevel === 'yes' ? 'active' : ''}`}
                   onClick={() => setGroundLevel('yes')}
                 >
-                  ✓ Yes
+                  Yes
                 </button>
                 <button
-                  className={`toggle-btn ${groundLevel === 'not-sure' ? 'active' : ''}`}
+                  className={`segment-btn ${groundLevel === 'not-sure' ? 'active' : ''}`}
                   onClick={() => setGroundLevel('not-sure')}
                 >
-                  ? Not Sure
+                  Not Sure
                 </button>
                 <button
-                  className={`toggle-btn ${groundLevel === 'no' ? 'active' : ''}`}
+                  className={`segment-btn ${groundLevel === 'no' ? 'active' : ''}`}
                   onClick={() => setGroundLevel('no')}
                 >
-                  ✗ No
+                  No
                 </button>
               </div>
             </div>
 
-            <div className="divider" style={{ marginTop: 40 }}>
-              <label className="form-label">Or upload rendering or PDF for detailed analysis</label>
+            <div style={{ marginTop: 32 }}>
+              <label className="form-label">Upload (Optional)</label>
               <div
                 className={`upload-zone ${dragging ? 'dragging' : ''}`}
                 onClick={() => fileInputRef.current?.click()}
@@ -620,196 +1116,195 @@
                   style={{ display: 'none' }}
                 />
                 {analyzing ? (
-                  <div className="loading">
+                  <div className="loading-state">
                     <div className="spinner"></div>
-                    <p>Analyzing file...</p>
+                    <p className="loading-text">Analyzing file...</p>
                   </div>
                 ) : (
                   <>
-                    <p>Drop rendering or PDF here or click to upload</p>
-                    <p>JPG, PNG, or PDF format</p>
+                    <div className="upload-icon">📄</div>
+                    <p>Drop rendering or PDF here</p>
+                    <p>or click to browse</p>
                   </>
                 )}
               </div>
-            </div>
 
-            {uploadedImage && (
-              <div className="divider">
-                <h3 style={{ margin: '0 0 15px 0', color: '#374151', fontSize: '14px', fontWeight: '600' }}>Uploaded Image</h3>
+              {uploadedImage && (
                 <img src={uploadedImage} alt="Booth rendering" className="preview-img" />
-              </div>
-            )}
+              )}
 
-            {uploadedPDF && (
-              <div className="divider">
-                <h3 style={{ margin: '0 0 15px 0', color: '#374151', fontSize: '14px', fontWeight: '600' }}>Uploaded PDF</h3>
+              {uploadedPDF && (
                 <div className="pdf-badge">📄 {uploadedPDF}</div>
+              )}
+            </div>
+          </div>
+
+          {/* Primary CTA */}
+          <button
+            className="btn-primary"
+            onClick={getAIQuote}
+            disabled={loadingAiQuote}
+            style={{ marginBottom: 24 }}
+          >
+            {loadingAiQuote ? 'Generating Quote...' : 'Generate AI Quote'}
+          </button>
+
+          {/* AI Quote Result */}
+          {loadingAiQuote && (
+            <div className="card">
+              <div className="loading-state">
+                <div className="spinner"></div>
+                <p className="loading-text">AI is analyzing your specifications...</p>
               </div>
-            )}
+            </div>
+          )}
 
-            {estimates ? (
-              <div>
-                <div style={{ background: '#f3f4f6', padding: '15px', borderRadius: '6px', marginBottom: '20px', fontSize: '14px' }}>
-                  <strong>Current Specs:</strong> {width}ft × {length}ft | {indoor ? 'Indoor' : 'Outdoor'} | {duration} days | Ground: {groundLevel === 'yes' ? 'Level' : groundLevel === 'no' ? 'Uneven' : 'Unknown'}
+          {aiQuote && !loadingAiQuote && (
+            <div className="card">
+              <div className="quote-result">
+                <span className="quote-badge ai">AI-Powered Quote</span>
+                <div className="quote-total">{formatCurrency(aiQuote.total)}</div>
+                <div className="quote-label">
+                  Estimated total including {((aiQuote.tax_rate || 0) * 100).toFixed(1)}% tax
                 </div>
-                <div className="estimates-grid">
-                  {[
-                    { tier: 'aggressive', label: 'Aggressive (Budget)', class: 'aggressive' },
-                    { tier: 'middle', label: 'Middle (Recommended)', class: 'middle' },
-                    { tier: 'conservative', label: 'Conservative (Premium)', class: 'conservative' }
-                  ].map(({ tier, label, class: className }) => (
-                    <div key={tier} className={`estimate-card ${className}`}>
-                      <h3>{label}</h3>
-                      <div className="line-item">
-                        <span className="line-item-label">Materials</span>
-                        <span className="line-item-amount">${estimates[tier].materials.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
-                      </div>
-                      <div className="line-item">
-                        <span className="line-item-label">Design & PM</span>
-                        <span className="line-item-amount">${estimates[tier].designPM.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
-                      </div>
-                      <div className="line-item">
-                        <span className="line-item-label">I&D Labor</span>
-                        <span className="line-item-amount">${estimates[tier].installDismantle.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
-                      </div>
-                      <div className="line-item">
-                        <span className="line-item-label">Logistics</span>
-                        <span className="line-item-amount">${estimates[tier].logistics.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
-                      </div>
-                      {estimates[tier].contingency > 0 && (
-                        <div className="line-item">
-                          <span className="line-item-label">Contingency</span>
-                          <span className="line-item-amount">${estimates[tier].contingency.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
-                        </div>
-                      )}
-                      <div className="total-line">
-                        <span>TOTAL</span>
-                        <span>${estimates[tier].total.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <button
-                  className="btn btn-ai"
-                  onClick={getAIQuote}
-                  disabled={loadingAiQuote}
-                >
-                  {loadingAiQuote ? '⏳ Generating AI Quote...' : '✨ Get AI Quote (Gemini)'}
-                </button>
+                <span className={`confidence-badge ${aiQuote.confidence || 'medium'}`}>
+                  {aiQuote.confidence === 'high' ? '✓' : aiQuote.confidence === 'low' ? '!' : '~'}
+                  {' '}{(aiQuote.confidence || 'medium').charAt(0).toUpperCase() + (aiQuote.confidence || 'medium').slice(1)} Confidence
+                </span>
+              </div>
 
-                {aiQuote && (
-                  <div className="ai-quote-section">
-                    <div className="ai-quote-header">
-                      <h3>AI-Generated Quote</h3>
-                      <span className="ai-badge">{aiQuote.project_type?.replace('_', ' ').toUpperCase() || 'STANDARD'}</span>
-                    </div>
-
-                    <div className="ai-quote-grid">
-                      <div className="ai-quote-card">
-                        <h4>Materials</h4>
-                        {aiQuote.materials?.walls > 0 && (
-                          <div className="ai-line-item">
-                            <span>Walls/Fabrication</span>
-                            <span>${aiQuote.materials.walls?.toLocaleString() || 0}</span>
-                          </div>
-                        )}
-                        {aiQuote.materials?.flooring > 0 && (
-                          <div className="ai-line-item">
-                            <span>Flooring</span>
-                            <span>${aiQuote.materials.flooring?.toLocaleString() || 0}</span>
-                          </div>
-                        )}
-                        {aiQuote.materials?.graphics > 0 && (
-                          <div className="ai-line-item">
-                            <span>Graphics/Signage</span>
-                            <span>${aiQuote.materials.graphics?.toLocaleString() || 0}</span>
-                          </div>
-                        )}
-                        {aiQuote.materials?.av_lighting > 0 && (
-                          <div className="ai-line-item">
-                            <span>AV & Lighting</span>
-                            <span>${aiQuote.materials.av_lighting?.toLocaleString() || 0}</span>
-                          </div>
-                        )}
-                        {aiQuote.materials?.furniture > 0 && (
-                          <div className="ai-line-item">
-                            <span>Furniture</span>
-                            <span>${aiQuote.materials.furniture?.toLocaleString() || 0}</span>
-                          </div>
-                        )}
-                        {aiQuote.materials?.other > 0 && (
-                          <div className="ai-line-item">
-                            <span>Other</span>
-                            <span>${aiQuote.materials.other?.toLocaleString() || 0}</span>
-                          </div>
-                        )}
-                        <div className="ai-line-item subtotal">
-                          <span>Materials Subtotal</span>
-                          <span>${aiQuote.materials?.subtotal?.toLocaleString() || 0}</span>
-                        </div>
+              <div className="breakdown-section">
+                <div className="breakdown-grid">
+                  <div className="breakdown-card">
+                    <div className="breakdown-title">Materials</div>
+                    {aiQuote.materials?.walls > 0 && (
+                      <div className="breakdown-item">
+                        <span className="breakdown-item-label">Walls/Fabrication</span>
+                        <span className="breakdown-item-value">{formatCurrency(aiQuote.materials.walls)}</span>
                       </div>
-
-                      <div className="ai-quote-card">
-                        <h4>Services</h4>
-                        <div className="ai-line-item">
-                          <span>Design & PM ({(aiQuote.services?.design_pm_percent * 100)?.toFixed(0) || 0}%)</span>
-                          <span>${aiQuote.services?.design_pm?.toLocaleString() || 0}</span>
-                        </div>
-                        <div className="ai-line-item">
-                          <span>Install & Dismantle ({(aiQuote.services?.install_dismantle_percent * 100)?.toFixed(0) || 0}%)</span>
-                          <span>${aiQuote.services?.install_dismantle?.toLocaleString() || 0}</span>
-                        </div>
-                        <div className="ai-line-item">
-                          <span>Logistics ({(aiQuote.services?.logistics_percent * 100)?.toFixed(0) || 0}%)</span>
-                          <span>${aiQuote.services?.logistics?.toLocaleString() || 0}</span>
-                        </div>
-                        <div className="ai-line-item subtotal">
-                          <span>Services Subtotal</span>
-                          <span>${aiQuote.services?.subtotal?.toLocaleString() || 0}</span>
-                        </div>
+                    )}
+                    {aiQuote.materials?.flooring > 0 && (
+                      <div className="breakdown-item">
+                        <span className="breakdown-item-label">Flooring</span>
+                        <span className="breakdown-item-value">{formatCurrency(aiQuote.materials.flooring)}</span>
                       </div>
-
-                      <div className="ai-total-section">
-                        {aiQuote.contingency > 0 && (
-                          <div className="ai-line-item" style={{ justifyContent: 'center', gap: '20px' }}>
-                            <span>Contingency:</span>
-                            <span>${aiQuote.contingency?.toLocaleString() || 0}</span>
-                          </div>
-                        )}
-                        <div className="ai-line-item" style={{ justifyContent: 'center', gap: '20px' }}>
-                          <span>Subtotal:</span>
-                          <span>${aiQuote.subtotal_before_tax?.toLocaleString() || 0}</span>
-                        </div>
-                        <div className="ai-line-item" style={{ justifyContent: 'center', gap: '20px' }}>
-                          <span>Tax ({(aiQuote.tax_rate * 100)?.toFixed(2) || 0}%):</span>
-                          <span>${aiQuote.tax_amount?.toLocaleString() || 0}</span>
-                        </div>
-                        <div className="ai-total">${aiQuote.total?.toLocaleString() || 0}</div>
-                        <div className={`ai-confidence ${aiQuote.confidence || 'medium'}`}>
-                          Confidence: {(aiQuote.confidence || 'medium').toUpperCase()}
-                        </div>
+                    )}
+                    {aiQuote.materials?.graphics > 0 && (
+                      <div className="breakdown-item">
+                        <span className="breakdown-item-label">Graphics</span>
+                        <span className="breakdown-item-value">{formatCurrency(aiQuote.materials.graphics)}</span>
                       </div>
-
-                      {aiQuote.notes && aiQuote.notes.length > 0 && (
-                        <div className="ai-notes">
-                          <h4>Notes & Assumptions</h4>
-                          <ul>
-                            {aiQuote.notes.map((note, i) => <li key={i}>{note}</li>)}
-                          </ul>
-                        </div>
-                      )}
+                    )}
+                    {aiQuote.materials?.av_lighting > 0 && (
+                      <div className="breakdown-item">
+                        <span className="breakdown-item-label">AV & Lighting</span>
+                        <span className="breakdown-item-value">{formatCurrency(aiQuote.materials.av_lighting)}</span>
+                      </div>
+                    )}
+                    {aiQuote.materials?.furniture > 0 && (
+                      <div className="breakdown-item">
+                        <span className="breakdown-item-label">Furniture</span>
+                        <span className="breakdown-item-value">{formatCurrency(aiQuote.materials.furniture)}</span>
+                      </div>
+                    )}
+                    {aiQuote.materials?.other > 0 && (
+                      <div className="breakdown-item">
+                        <span className="breakdown-item-label">Other</span>
+                        <span className="breakdown-item-value">{formatCurrency(aiQuote.materials.other)}</span>
+                      </div>
+                    )}
+                    <div className="breakdown-item breakdown-subtotal">
+                      <span className="breakdown-item-label">Subtotal</span>
+                      <span className="breakdown-item-value">{formatCurrency(aiQuote.materials?.subtotal)}</span>
                     </div>
                   </div>
-                )}
 
-                <button className="btn" onClick={downloadQuote} style={{ marginTop: '20px' }}>📥 Download Quote as HTML</button>
+                  <div className="breakdown-card">
+                    <div className="breakdown-title">Services</div>
+                    <div className="breakdown-item">
+                      <span className="breakdown-item-label">Design & PM</span>
+                      <span className="breakdown-item-value">{formatCurrency(aiQuote.services?.design_pm)}</span>
+                    </div>
+                    <div className="breakdown-item">
+                      <span className="breakdown-item-label">Install & Dismantle</span>
+                      <span className="breakdown-item-value">{formatCurrency(aiQuote.services?.install_dismantle)}</span>
+                    </div>
+                    <div className="breakdown-item">
+                      <span className="breakdown-item-label">Logistics</span>
+                      <span className="breakdown-item-value">{formatCurrency(aiQuote.services?.logistics)}</span>
+                    </div>
+                    <div className="breakdown-item breakdown-subtotal">
+                      <span className="breakdown-item-label">Subtotal</span>
+                      <span className="breakdown-item-value">{formatCurrency(aiQuote.services?.subtotal)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: 24 }}>
+                  {aiQuote.contingency > 0 && (
+                    <div className="summary-row">
+                      <span>Contingency</span>
+                      <span>{formatCurrency(aiQuote.contingency)}</span>
+                    </div>
+                  )}
+                  <div className="summary-row">
+                    <span>Subtotal</span>
+                    <span>{formatCurrency(aiQuote.subtotal_before_tax)}</span>
+                  </div>
+                  <div className="summary-row">
+                    <span>Tax ({((aiQuote.tax_rate || 0) * 100).toFixed(2)}%)</span>
+                    <span>{formatCurrency(aiQuote.tax_amount)}</span>
+                  </div>
+                  <div className="summary-row total">
+                    <span>Total</span>
+                    <span>{formatCurrency(aiQuote.total)}</span>
+                  </div>
+                </div>
+
+                {aiQuote.notes && aiQuote.notes.length > 0 && (
+                  <div className="notes-section">
+                    <div className="notes-title">Notes & Assumptions</div>
+                    <ul className="notes-list">
+                      {aiQuote.notes.map((note, i) => <li key={i}>{note}</li>)}
+                    </ul>
+                  </div>
+                )}
               </div>
-            ) : (
-              <div className="empty-state">
-                <p>Enter booth dimensions above to generate estimates</p>
+
+              <button className="btn-secondary" onClick={downloadQuote} style={{ marginTop: 24 }}>
+                Download Quote
+              </button>
+            </div>
+          )}
+
+          {/* Template Estimates (Collapsible) */}
+          {estimates && (
+            <div className="card">
+              <div className="collapsible-header" onClick={() => setShowTemplates(!showTemplates)}>
+                <h3>Quick Estimates</h3>
+                <span className={`collapsible-toggle ${showTemplates ? 'open' : ''}`}>▼</span>
               </div>
-            )}
-          </div>
+              <div className={`collapsible-content ${showTemplates ? 'open' : ''}`}>
+                <div className="template-estimates">
+                  <div className="template-card budget">
+                    <div className="template-tier">Budget</div>
+                    <div className="template-total">{formatCurrency(estimates.aggressive.total)}</div>
+                  </div>
+                  <div className="template-card standard">
+                    <div className="template-tier">Standard</div>
+                    <div className="template-total">{formatCurrency(estimates.middle.total)}</div>
+                  </div>
+                  <div className="template-card premium">
+                    <div className="template-tier">Premium</div>
+                    <div className="template-total">{formatCurrency(estimates.conservative.total)}</div>
+                  </div>
+                </div>
+                <p style={{ fontSize: 13, color: '#86868b', textAlign: 'center' }}>
+                  Template-based estimates. Use AI Quote for detailed, calibrated pricing.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       );
     }
