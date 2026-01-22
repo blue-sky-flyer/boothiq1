@@ -835,7 +835,20 @@
           }
 
           console.log('Claude analysis:', data.content[0].text);
-          return JSON.parse(data.content[0].text);
+
+          // Clean JSON from markdown code fences if present
+          let jsonText = data.content[0].text.trim();
+          if (jsonText.startsWith('```json')) {
+            jsonText = jsonText.slice(7);
+          } else if (jsonText.startsWith('```')) {
+            jsonText = jsonText.slice(3);
+          }
+          if (jsonText.endsWith('```')) {
+            jsonText = jsonText.slice(0, -3);
+          }
+          jsonText = jsonText.trim();
+
+          return JSON.parse(jsonText);
         } catch (err) {
           throw new Error('Analysis failed: ' + err.message);
         }
