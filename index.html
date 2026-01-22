@@ -60,7 +60,10 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.min.js';
+    // PDF.js is optional - app works without it (just no PDF upload)
+    if (typeof pdfjsLib !== 'undefined') {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.min.js';
+    }
 
     const BOOTH_TEMPLATES = {
       standard10x10: {
@@ -129,6 +132,9 @@
       const [dragging, setDragging] = React.useState(false);
 
       const extractPdfText = async (file) => {
+        if (typeof pdfjsLib === 'undefined') {
+          throw new Error('PDF support unavailable - try disabling ad blocker or upload an image instead');
+        }
         try {
           const arrayBuffer = await file.arrayBuffer();
           const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
