@@ -813,8 +813,27 @@
             })
           });
 
-          if (!response.ok) throw new Error('Worker API failed');
           const data = await response.json();
+          console.log('Claude response:', JSON.stringify(data, null, 2));
+
+          // Check for worker error
+          if (data.error) {
+            throw new Error(data.error);
+          }
+
+          // Check for Claude API error
+          if (data.type === 'error') {
+            throw new Error(data.error?.message || 'Claude API error');
+          }
+
+          if (!response.ok) throw new Error('Worker API failed');
+
+          // Validate response structure
+          if (!data.content || !data.content[0] || !data.content[0].text) {
+            console.error('Unexpected Claude response structure:', data);
+            throw new Error('Invalid response from Claude');
+          }
+
           console.log('Claude analysis:', data.content[0].text);
           return JSON.parse(data.content[0].text);
         } catch (err) {
