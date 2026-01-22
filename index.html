@@ -775,23 +775,41 @@
         updateEstimates();
       }, [location, width, length, indoor, duration, groundLevel]);
 
-      const analyzeWithClaude = async (imageBase64 = null, pdfTextContent = '') => {
+      const analyzeWithClaude = async (imageBase64 = null, pdfTextContent = '', imageMediaType = 'image/jpeg') => {
         try {
-          let promptText = '';
+          const jsonSchema = '{wallSqft: number, floorSqft: number, wallType: "paintedMDF"|"oakWood"|"complexMillwork", floorType: "standardCarpet"|"printedVinyl"|"gFloorNew"|"astroTurf", graphics: "modest"|"moderate"|"premium"|"extensive", graphicsEstimate: number}';
 
-          if (pdfTextContent && imageBase64) {
-            promptText = `You have a booth rendering image and the following PDF parts list. Combine both to extract component details.\n\nPDF Content:\n${pdfTextContent}\n\nReturn ONLY valid JSON: {wallSqft: number, floorSqft: number, wallType: "paintedMDF"|"oakWood"|"complexMillwork", floorType: "standardCarpet"|"printedVinyl"|"gFloorNew"|"astroTurf", graphics: "modest"|"moderate"|"premium"|"extensive", graphicsEstimate: number}. No markdown, no explanation.`;
-          } else if (pdfTextContent) {
-            promptText = `Extract booth component details from this parts list PDF text.\n\nPDF Content:\n${pdfTextContent}\n\nReturn ONLY valid JSON: {wallSqft: number, floorSqft: number, wallType: "paintedMDF"|"oakWood"|"complexMillwork", floorType: "standardCarpet"|"printedVinyl"|"gFloorNew"|"astroTurf", graphics: "modest"|"moderate"|"premium"|"extensive", graphicsEstimate: number}. No markdown, no explanation.`;
-          } else if (imageBase64) {
-            promptText = 'Analyze booth rendering and return JSON: {wallSqft: number, floorSqft: number, wallType: "paintedMDF"|"oakWood"|"complexMillwork", floorType: "standardCarpet"|"printedVinyl"|"gFloorNew"|"astroTurf", graphics: "modest"|"moderate"|"premium"|"extensive", graphicsEstimate: number}. Return ONLY valid JSON, no markdown or explanation.';
+          let messageContent = [];
+
+          if (imageBase64) {
+            // Add image to message content for Claude Vision
+            messageContent.push({
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: imageMediaType,
+                data: imageBase64
+              }
+            });
           }
+
+          // Build prompt text based on what we have
+          let promptText = '';
+          if (pdfTextContent && imageBase64) {
+            promptText = `Analyze this booth rendering image along with the PDF parts list below. Extract component details.\n\nPDF Content:\n${pdfTextContent}\n\nReturn ONLY valid JSON: ${jsonSchema}. No markdown, no explanation.`;
+          } else if (pdfTextContent) {
+            promptText = `Extract booth component details from this parts list PDF text.\n\nPDF Content:\n${pdfTextContent}\n\nReturn ONLY valid JSON: ${jsonSchema}. No markdown, no explanation.`;
+          } else if (imageBase64) {
+            promptText = `Analyze this booth rendering image. Estimate wall square footage, floor area, materials used, and graphics complexity. Return ONLY valid JSON: ${jsonSchema}. No markdown, no explanation.`;
+          }
+
+          messageContent.push({ type: 'text', text: promptText });
 
           const response = await fetch(CLAUDE_WORKER_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              messages: [{ role: 'user', content: promptText }]
+              messages: [{ role: 'user', content: messageContent }]
             })
           });
 
@@ -884,7 +902,9 @@
             reader.readAsDataURL(file);
           });
 
-          const extracted = await analyzeWithClaude(base64, pdfText);
+          // Pass the file's MIME type for Claude Vision API
+          const mediaType = file.type || 'image/jpeg';
+          const extracted = await analyzeWithClaude(base64, pdfText, mediaType);
           updateEstimates(extracted);
         } catch (err) {
           setError('Error analyzing rendering: ' + err.message);
