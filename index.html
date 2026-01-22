@@ -61,6 +61,28 @@
     .empty-state { text-align: center; color: #9ca3af; padding: 40px; }
     .section-title { font-size: 14px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 20px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; }
     .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+    .btn-ai { background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%); margin-top: 20px; }
+    .btn-ai:hover { background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%); }
+    .btn-ai:disabled { background: #9ca3af; cursor: not-allowed; }
+    .ai-quote-section { margin-top: 30px; padding: 25px; background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%); border: 2px solid #8b5cf6; border-radius: 12px; }
+    .ai-quote-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .ai-quote-header h3 { color: #5b21b6; margin: 0; font-size: 18px; }
+    .ai-badge { background: #8b5cf6; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+    .ai-quote-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .ai-quote-card { background: white; border-radius: 8px; padding: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .ai-quote-card h4 { margin: 0 0 12px 0; color: #374151; font-size: 14px; border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; }
+    .ai-line-item { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; }
+    .ai-line-item.subtotal { border-top: 1px solid #e5e7eb; margin-top: 8px; padding-top: 8px; font-weight: 600; }
+    .ai-total-section { grid-column: 1 / -1; background: white; border-radius: 8px; padding: 20px; text-align: center; }
+    .ai-total { font-size: 36px; font-weight: 700; color: #5b21b6; }
+    .ai-confidence { margin-top: 10px; font-size: 14px; }
+    .ai-confidence.high { color: #059669; }
+    .ai-confidence.medium { color: #d97706; }
+    .ai-confidence.low { color: #dc2626; }
+    .ai-notes { grid-column: 1 / -1; background: #fefce8; border: 1px solid #fde047; border-radius: 8px; padding: 15px; font-size: 13px; }
+    .ai-notes h4 { margin: 0 0 10px 0; color: #854d0e; }
+    .ai-notes ul { margin: 0; padding-left: 20px; color: #713f12; }
+    @media (max-width: 768px) { .ai-quote-grid { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -72,8 +94,9 @@
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.min.js';
     }
 
-    // Cloudflare Worker URL - handles API key and SKILL.md server-side
-    const WORKER_URL = 'https://boothiq-proxy.raj-lucia001.workers.dev';
+    // Cloudflare Worker URLs - handle API keys and SKILL.md server-side
+    const CLAUDE_WORKER_URL = 'https://boothiq-proxy.raj-lucia001.workers.dev';
+    const GEMINI_WORKER_URL = 'https://boothiq-gemini.raj-lucia001.workers.dev'; // Deploy with: wrangler deploy -c wrangler-gemini.toml
 
     const DURATION_OPTIONS = [1, 3, 7, 30];
 
@@ -107,6 +130,8 @@
       const [error, setError] = React.useState('');
       const fileInputRef = React.useRef(null);
       const [dragging, setDragging] = React.useState(false);
+      const [aiQuote, setAiQuote] = React.useState(null);
+      const [loadingAiQuote, setLoadingAiQuote] = React.useState(false);
 
       const calculateBoothSpecs = () => {
         const w = parseFloat(width) || 0;
@@ -249,7 +274,7 @@
           }
 
           // Route through Cloudflare Worker (handles API key server-side)
-          const response = await fetch(WORKER_URL, {
+          const response = await fetch(CLAUDE_WORKER_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -266,6 +291,64 @@
           return JSON.parse(data.content[0].text);
         } catch (err) {
           throw new Error('Analysis failed: ' + err.message);
+        }
+      };
+
+      // Get structured AI quote from Gemini
+      const getAIQuote = async () => {
+        setError('');
+        setLoadingAiQuote(true);
+        setAiQuote(null);
+
+        try {
+          // Build the prompt with all current specs
+          const specs = {
+            width: parseFloat(width) || 10,
+            length: parseFloat(length) || 10,
+            location: location,
+            environment: indoor ? 'indoor' : 'outdoor',
+            duration: duration,
+            groundLevel: groundLevel,
+            uploadedPdf: uploadedPDF || null,
+            pdfContent: pdfText || null
+          };
+
+          let promptText = `Generate a detailed booth quote for:
+- Dimensions: ${specs.width}ft × ${specs.length}ft (${specs.width * specs.length} sq ft)
+- Location: ${specs.location}
+- Environment: ${specs.environment}
+- Duration: ${specs.duration} days
+- Ground Level: ${specs.groundLevel === 'yes' ? 'Yes (level floor)' : specs.groundLevel === 'no' ? 'No (uneven, requires leveling)' : 'Unknown'}`;
+
+          if (specs.pdfContent) {
+            promptText += `\n\nAdditional context from uploaded PDF:\n${specs.pdfContent.substring(0, 2000)}`;
+          }
+
+          promptText += `\n\nProvide a complete quote with materials breakdown, services (design/PM, install/dismantle, logistics), tax, and total. Use the calibrated service ratios from the SKILL.md for this project type.`;
+
+          const response = await fetch(GEMINI_WORKER_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              messages: [{ role: 'user', content: promptText }],
+              model: 'gemini-2.5-flash'
+            })
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Gemini API failed');
+          }
+
+          const data = await response.json();
+          console.log('Gemini AI Quote:', data);
+          setAiQuote(data.quote);
+
+        } catch (err) {
+          console.error('AI Quote error:', err);
+          setError('AI Quote failed: ' + err.message);
+        } finally {
+          setLoadingAiQuote(false);
         }
       };
 
@@ -606,7 +689,120 @@
                     </div>
                   ))}
                 </div>
-                <button className="btn" onClick={downloadQuote}>📥 Download Quote as HTML</button>
+                <button
+                  className="btn btn-ai"
+                  onClick={getAIQuote}
+                  disabled={loadingAiQuote}
+                >
+                  {loadingAiQuote ? '⏳ Generating AI Quote...' : '✨ Get AI Quote (Gemini)'}
+                </button>
+
+                {aiQuote && (
+                  <div className="ai-quote-section">
+                    <div className="ai-quote-header">
+                      <h3>AI-Generated Quote</h3>
+                      <span className="ai-badge">{aiQuote.project_type?.replace('_', ' ').toUpperCase() || 'STANDARD'}</span>
+                    </div>
+
+                    <div className="ai-quote-grid">
+                      <div className="ai-quote-card">
+                        <h4>Materials</h4>
+                        {aiQuote.materials?.walls > 0 && (
+                          <div className="ai-line-item">
+                            <span>Walls/Fabrication</span>
+                            <span>${aiQuote.materials.walls?.toLocaleString() || 0}</span>
+                          </div>
+                        )}
+                        {aiQuote.materials?.flooring > 0 && (
+                          <div className="ai-line-item">
+                            <span>Flooring</span>
+                            <span>${aiQuote.materials.flooring?.toLocaleString() || 0}</span>
+                          </div>
+                        )}
+                        {aiQuote.materials?.graphics > 0 && (
+                          <div className="ai-line-item">
+                            <span>Graphics/Signage</span>
+                            <span>${aiQuote.materials.graphics?.toLocaleString() || 0}</span>
+                          </div>
+                        )}
+                        {aiQuote.materials?.av_lighting > 0 && (
+                          <div className="ai-line-item">
+                            <span>AV & Lighting</span>
+                            <span>${aiQuote.materials.av_lighting?.toLocaleString() || 0}</span>
+                          </div>
+                        )}
+                        {aiQuote.materials?.furniture > 0 && (
+                          <div className="ai-line-item">
+                            <span>Furniture</span>
+                            <span>${aiQuote.materials.furniture?.toLocaleString() || 0}</span>
+                          </div>
+                        )}
+                        {aiQuote.materials?.other > 0 && (
+                          <div className="ai-line-item">
+                            <span>Other</span>
+                            <span>${aiQuote.materials.other?.toLocaleString() || 0}</span>
+                          </div>
+                        )}
+                        <div className="ai-line-item subtotal">
+                          <span>Materials Subtotal</span>
+                          <span>${aiQuote.materials?.subtotal?.toLocaleString() || 0}</span>
+                        </div>
+                      </div>
+
+                      <div className="ai-quote-card">
+                        <h4>Services</h4>
+                        <div className="ai-line-item">
+                          <span>Design & PM ({(aiQuote.services?.design_pm_percent * 100)?.toFixed(0) || 0}%)</span>
+                          <span>${aiQuote.services?.design_pm?.toLocaleString() || 0}</span>
+                        </div>
+                        <div className="ai-line-item">
+                          <span>Install & Dismantle ({(aiQuote.services?.install_dismantle_percent * 100)?.toFixed(0) || 0}%)</span>
+                          <span>${aiQuote.services?.install_dismantle?.toLocaleString() || 0}</span>
+                        </div>
+                        <div className="ai-line-item">
+                          <span>Logistics ({(aiQuote.services?.logistics_percent * 100)?.toFixed(0) || 0}%)</span>
+                          <span>${aiQuote.services?.logistics?.toLocaleString() || 0}</span>
+                        </div>
+                        <div className="ai-line-item subtotal">
+                          <span>Services Subtotal</span>
+                          <span>${aiQuote.services?.subtotal?.toLocaleString() || 0}</span>
+                        </div>
+                      </div>
+
+                      <div className="ai-total-section">
+                        {aiQuote.contingency > 0 && (
+                          <div className="ai-line-item" style={{ justifyContent: 'center', gap: '20px' }}>
+                            <span>Contingency:</span>
+                            <span>${aiQuote.contingency?.toLocaleString() || 0}</span>
+                          </div>
+                        )}
+                        <div className="ai-line-item" style={{ justifyContent: 'center', gap: '20px' }}>
+                          <span>Subtotal:</span>
+                          <span>${aiQuote.subtotal_before_tax?.toLocaleString() || 0}</span>
+                        </div>
+                        <div className="ai-line-item" style={{ justifyContent: 'center', gap: '20px' }}>
+                          <span>Tax ({(aiQuote.tax_rate * 100)?.toFixed(2) || 0}%):</span>
+                          <span>${aiQuote.tax_amount?.toLocaleString() || 0}</span>
+                        </div>
+                        <div className="ai-total">${aiQuote.total?.toLocaleString() || 0}</div>
+                        <div className={`ai-confidence ${aiQuote.confidence || 'medium'}`}>
+                          Confidence: {(aiQuote.confidence || 'medium').toUpperCase()}
+                        </div>
+                      </div>
+
+                      {aiQuote.notes && aiQuote.notes.length > 0 && (
+                        <div className="ai-notes">
+                          <h4>Notes & Assumptions</h4>
+                          <ul>
+                            {aiQuote.notes.map((note, i) => <li key={i}>{note}</li>)}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <button className="btn" onClick={downloadQuote} style={{ marginTop: '20px' }}>📥 Download Quote as HTML</button>
               </div>
             ) : (
               <div className="empty-state">

@@ -1,0 +1,13 @@
+name = "boothiq-gemini"
+main = "workers/gemini-quote.js"
+compatibility_date = "2024-01-01"
+
+# Account and zone IDs are optional - wrangler will prompt if needed
+# account_id = ""
+
+[vars]
+# Environment variables (non-sensitive)
+# Add any non-secret config here
+
+# Secrets must be set via CLI:
+# wrangler secret put GOOGLE_API_KEY -c wrangler-gemini.toml
