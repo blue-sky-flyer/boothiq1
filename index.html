@@ -18,11 +18,16 @@
     .header p { color: #6b7280; font-size: 16px; }
     .form-group { margin-bottom: 30px; }
     .form-label { display: block; margin-bottom: 8px; font-weight: 600; color: #374151; }
-    select { width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; }
-    .template-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
-    .template-btn { padding: 12px; border: 1px solid #d1d5db; border-radius: 6px; background: white; cursor: pointer; font-size: 14px; font-weight: 500; color: #374151; transition: all 0.2s; }
-    .template-btn:hover { border-color: #2563eb; }
-    .template-btn.active { border: 2px solid #2563eb; background: #eff6ff; color: #2563eb; font-weight: 600; }
+    select, input[type="number"] { width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; }
+    input[type="range"] { width: 100%; height: 6px; }
+    .dimensions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+    .toggle-group { display: flex; gap: 10px; }
+    .toggle-btn { padding: 10px 16px; border: 2px solid #d1d5db; border-radius: 6px; background: white; cursor: pointer; font-size: 14px; font-weight: 500; color: #374151; transition: all 0.2s; }
+    .toggle-btn:hover { border-color: #9ca3af; }
+    .toggle-btn.active { border-color: #2563eb; background: #eff6ff; color: #2563eb; font-weight: 600; }
+    .duration-buttons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+    .three-state-toggle { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .three-state-toggle .toggle-btn { width: 100%; padding: 10px; }
     .upload-zone { border: 2px dashed #d1d5db; border-radius: 8px; padding: 40px; text-align: center; cursor: pointer; background: #fafafa; transition: all 0.2s; }
     .upload-zone:hover { background: #f3f4f6; border-color: #9ca3af; }
     .upload-zone.dragging { background: #f0f0f0; border-color: #2563eb; }
@@ -54,6 +59,8 @@
     .preview-img { max-width: 100%; border-radius: 6px; max-height: 300px; margin: 15px 0; }
     .pdf-badge { display: inline-flex; align-items: center; gap: 10px; padding: 12px; background: #f3f4f6; border-radius: 6px; color: #374151; margin: 15px 0; }
     .empty-state { text-align: center; color: #9ca3af; padding: 40px; }
+    .section-title { font-size: 14px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 20px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; }
+    .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
   </style>
 </head>
 <body>
@@ -65,44 +72,10 @@
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.min.js';
     }
 
-    const BOOTH_TEMPLATES = {
-      standard10x10: {
-        name: 'Standard 10x10 Booth',
-        wallSqft: 280,
-        floorSqft: 100,
-        wallType: 'paintedMDF',
-        floorType: 'standardCarpet',
-        graphics: 'moderate',
-        furniture: 'light'
-      },
-      standard20x10: {
-        name: 'Standard 20x10 Booth',
-        wallSqft: 580,
-        floorSqft: 200,
-        wallType: 'paintedMDF',
-        floorType: 'standardCarpet',
-        graphics: 'moderate',
-        furniture: 'moderate'
-      },
-      premium20x10: {
-        name: 'Premium 20x10 Booth',
-        wallSqft: 580,
-        floorSqft: 200,
-        wallType: 'oakWood',
-        floorType: 'gFloorNew',
-        graphics: 'premium',
-        furniture: 'premium'
-      },
-      ballPit: {
-        name: 'Ball Pit Activation',
-        wallSqft: 450,
-        floorSqft: 100,
-        wallType: 'paintedMDF',
-        floorType: 'standardCarpet',
-        graphics: 'extensive',
-        furniture: 'minimal'
-      }
-    };
+    // Cloudflare Worker URL - handles API key and SKILL.md server-side
+    const WORKER_URL = 'https://boothiq-proxy.raj-lucia001.workers.dev';
+
+    const DURATION_OPTIONS = [1, 3, 7, 30];
 
     const CATALOG_PRICING = {
       walls: {
@@ -120,7 +93,11 @@
 
     function BoothIQ() {
       const [location, setLocation] = React.useState('toronto');
-      const [selectedTemplate, setSelectedTemplate] = React.useState('');
+      const [width, setWidth] = React.useState(10);
+      const [length, setLength] = React.useState(10);
+      const [indoor, setIndoor] = React.useState(true);
+      const [duration, setDuration] = React.useState(3);
+      const [groundLevel, setGroundLevel] = React.useState('not-sure');
       const [components, setComponents] = React.useState(null);
       const [estimates, setEstimates] = React.useState(null);
       const [uploadedImage, setUploadedImage] = React.useState(null);
@@ -130,6 +107,24 @@
       const [error, setError] = React.useState('');
       const fileInputRef = React.useRef(null);
       const [dragging, setDragging] = React.useState(false);
+
+      const calculateBoothSpecs = () => {
+        const w = parseFloat(width) || 0;
+        const l = parseFloat(length) || 0;
+        
+        // Calculate wall sqft (perimeter × 10ft height assumed)
+        const perimeter = (w + l) * 2;
+        const wallSqft = perimeter * 10;
+        const floorSqft = w * l;
+
+        return {
+          wallSqft,
+          floorSqft,
+          wallType: 'paintedMDF',
+          floorType: 'standardCarpet',
+          graphics: 'moderate'
+        };
+      };
 
       const extractPdfText = async (file) => {
         if (typeof pdfjsLib === 'undefined') {
@@ -170,7 +165,7 @@
         return cost;
       };
 
-      const calculateEstimates = (comps, loc) => {
+      const calculateEstimates = (comps, loc, dur, env, ground) => {
         const materials = calculateMaterials(comps);
         const subtotal = materials;
         
@@ -182,26 +177,41 @@
 
         const rates = serviceRates[loc] || serviceRates.toronto;
         
+        // Duration multiplier: longer use = lower per-day cost
+        const durationMultipliers = {
+          1: 1.0,
+          3: 0.82,
+          7: 0.60,
+          30: 0.65
+        };
+        const durationMult = durationMultipliers[dur] || 0.95;
+
+        // Outdoor multiplier (outdoor = more setup/breakdown labor)
+        const outdoorMult = env === 'outdoor' ? 1.15 : 1.0;
+
+        // Ground level multiplier (uneven = more labor)
+        const groundMultiplier = ground === 'no' ? 1.20 : ground === 'yes' ? 1.0 : 1.08;
+        
         const estimates = {
           aggressive: {
             materials: materials * 0.85,
-            designPM: subtotal * rates.designPM * 0.85,
-            installDismantle: subtotal * rates.installDismantle * 0.80,
-            logistics: subtotal * rates.logistics * 0.90,
+            designPM: subtotal * rates.designPM * 0.85 * durationMult * outdoorMult,
+            installDismantle: subtotal * rates.installDismantle * 0.80 * outdoorMult * groundMultiplier,
+            logistics: subtotal * rates.logistics * 0.90 * durationMult,
             contingency: 0
           },
           middle: {
             materials: materials,
-            designPM: subtotal * rates.designPM,
-            installDismantle: subtotal * rates.installDismantle,
-            logistics: subtotal * rates.logistics,
+            designPM: subtotal * rates.designPM * durationMult * outdoorMult,
+            installDismantle: subtotal * rates.installDismantle * outdoorMult * groundMultiplier,
+            logistics: subtotal * rates.logistics * durationMult,
             contingency: subtotal * 0.05
           },
           conservative: {
             materials: materials * 1.20,
-            designPM: subtotal * rates.designPM * 1.15,
-            installDismantle: subtotal * rates.installDismantle * 1.20,
-            logistics: subtotal * rates.logistics * 1.15,
+            designPM: subtotal * rates.designPM * 1.15 * durationMult * outdoorMult,
+            installDismantle: subtotal * rates.installDismantle * 1.20 * outdoorMult * groundMultiplier,
+            logistics: subtotal * rates.logistics * 1.15 * durationMult,
             contingency: subtotal * 0.15
           }
         };
@@ -215,114 +225,44 @@
         }, {});
       };
 
-      const handleTemplateSelect = async (templateKey) => {
-        setSelectedTemplate(templateKey);
-        const template = BOOTH_TEMPLATES[templateKey];
-        setComponents(template);
+      const updateEstimates = (newComps = null) => {
+        const specs = newComps || calculateBoothSpecs();
+        setComponents(specs);
+        const calcs = calculateEstimates(specs, location, duration, indoor ? 'indoor' : 'outdoor', groundLevel);
+        setEstimates(calcs);
+      };
 
-        // Quick local estimate for immediate feedback
-        const localCalcs = calculateEstimates(template, location);
-        setEstimates(localCalcs);
+      React.useEffect(() => {
+        updateEstimates();
+      }, [location, width, length, indoor, duration, groundLevel]);
 
-        // Then call Worker for accurate Claude-powered quote
-        setAnalyzing(true);
-        setError('');
+      const analyzeWithClaude = async (imageBase64 = null, pdfTextContent = '') => {
         try {
-          const wallTypeNames = {
-            paintedMDF: 'painted MDF',
-            oakWood: 'oak wood',
-            complexMillwork: 'complex millwork'
-          };
-          const floorTypeNames = {
-            standardCarpet: 'standard carpet',
-            printedVinyl: 'printed vinyl',
-            gFloorNew: 'G-Floor (new)',
-            astroTurf: 'astro turf'
-          };
+          let promptText = '';
 
-          const prompt = `Generate a quote for a ${template.name} in ${location === 'toronto' ? 'Toronto' : location === 'montreal' ? 'Montreal' : 'USA'}.
+          if (pdfTextContent && imageBase64) {
+            promptText = `You have a booth rendering image and the following PDF parts list. Combine both to extract component details.\n\nPDF Content:\n${pdfTextContent}\n\nReturn ONLY valid JSON: {wallSqft: number, floorSqft: number, wallType: "paintedMDF"|"oakWood"|"complexMillwork", floorType: "standardCarpet"|"printedVinyl"|"gFloorNew"|"astroTurf", graphics: "modest"|"moderate"|"premium"|"extensive", graphicsEstimate: number}. No markdown, no explanation.`;
+          } else if (pdfTextContent) {
+            promptText = `Extract booth component details from this parts list PDF text.\n\nPDF Content:\n${pdfTextContent}\n\nReturn ONLY valid JSON: {wallSqft: number, floorSqft: number, wallType: "paintedMDF"|"oakWood"|"complexMillwork", floorType: "standardCarpet"|"printedVinyl"|"gFloorNew"|"astroTurf", graphics: "modest"|"moderate"|"premium"|"extensive", graphicsEstimate: number}. No markdown, no explanation.`;
+          } else if (imageBase64) {
+            promptText = 'Analyze booth rendering and return JSON: {wallSqft: number, floorSqft: number, wallType: "paintedMDF"|"oakWood"|"complexMillwork", floorType: "standardCarpet"|"printedVinyl"|"gFloorNew"|"astroTurf", graphics: "modest"|"moderate"|"premium"|"extensive", graphicsEstimate: number}. Return ONLY valid JSON, no markdown or explanation.';
+          }
 
-Specifications:
-- Walls: ${template.wallSqft} sqft of ${wallTypeNames[template.wallType] || template.wallType}
-- Flooring: ${template.floorSqft} sqft of ${floorTypeNames[template.floorType] || template.floorType}
-- Graphics level: ${template.graphics}
-- Furniture level: ${template.furniture || 'moderate'}
-
-Use your calibrated pricing and service ratios. Return the quote in your standard format.`;
-
+          // Route through Cloudflare Worker (handles API key server-side)
           const response = await fetch(WORKER_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              messages: [{ role: 'user', content: prompt }]
+              messages: [{
+                role: 'user',
+                content: promptText
+              }]
             })
           });
 
-          if (response.ok) {
-            const data = await response.json();
-            console.log('Claude quote:', data.content[0].text);
-            // For now, keep using local estimates but log Claude's response
-            // Future: parse Claude's response and display it
-          }
-        } catch (err) {
-          console.error('Worker call failed:', err);
-          // Silently fail - local estimates already shown
-        } finally {
-          setAnalyzing(false);
-        }
-      };
-
-      // Cloudflare Worker URL - replace with your deployed Worker URL
-      const WORKER_URL = 'https://boothiq-proxy.raj-lucia001.workers.dev';
-
-      const analyzeWithClaude = async (imageBase64 = null, pdfTextContent = '') => {
-        try {
-          const content = [];
-
-          if (imageBase64) {
-            content.push({
-              type: 'image',
-              source: { type: 'base64', media_type: 'image/jpeg', data: imageBase64 }
-            });
-          }
-
-          if (pdfTextContent) {
-            const prompt = imageBase64
-              ? `You have a booth rendering image and the following PDF parts list. Combine both to extract component details.`
-              : `Extract booth component details from this parts list PDF text.`;
-
-            content.push({
-              type: 'text',
-              text: `${prompt}\n\nPDF Content:\n${pdfTextContent}\n\nReturn ONLY valid JSON: {wallSqft: number, floorSqft: number, wallType: "paintedMDF"|"oakWood"|"complexMillwork", floorType: "standardCarpet"|"printedVinyl"|"gFloorNew"|"astroTurf", graphics: "modest"|"moderate"|"premium"|"extensive", graphicsEstimate: number}. No markdown, no explanation.`
-            });
-          } else if (imageBase64) {
-            content.push({
-              type: 'text',
-              text: 'Analyze booth rendering and return JSON: {wallSqft: number, floorSqft: number, wallType: "paintedMDF"|"oakWood"|"complexMillwork", floorType: "standardCarpet"|"printedVinyl"|"gFloorNew"|"astroTurf", graphics: "modest"|"moderate"|"premium"|"extensive", graphicsEstimate: number}. Return ONLY valid JSON, no markdown or explanation.'
-            });
-          }
-
-          // Route through Cloudflare Worker (API key and SKILL.md handled server-side)
-          const response = await fetch(WORKER_URL, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              messages: [
-                {
-                  role: 'user',
-                  content
-                }
-              ]
-            })
-          });
-
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.error || 'Worker API failed');
-          }
+          if (!response.ok) throw new Error('Worker API failed');
           const data = await response.json();
+          console.log('Claude analysis:', data.content[0].text);
           return JSON.parse(data.content[0].text);
         } catch (err) {
           throw new Error('Analysis failed: ' + err.message);
@@ -334,8 +274,7 @@ Use your calibrated pricing and service ratios. Return the quote in your standar
 
         setError('');
         setAnalyzing(true);
-        const imageUrl = URL.createObjectURL(file);
-        setUploadedImage(imageUrl);
+        setUploadedImage(URL.createObjectURL(file));
 
         try {
           // Convert file to base64 using Promise wrapper
@@ -355,10 +294,7 @@ Use your calibrated pricing and service ratios. Return the quote in your standar
           });
 
           const extracted = await analyzeWithClaude(base64, pdfText);
-          setComponents(extracted);
-
-          const calcs = calculateEstimates(extracted, location);
-          setEstimates(calcs);
+          updateEstimates(extracted);
         } catch (err) {
           setError('Error analyzing rendering: ' + err.message);
           // Don't clear the image - user can still see what they uploaded
@@ -379,10 +315,7 @@ Use your calibrated pricing and service ratios. Return the quote in your standar
           setPdfText(text);
 
           const extracted = await analyzeWithClaude(null, text);
-          setComponents(extracted);
-          
-          const calcs = calculateEstimates(extracted, location);
-          setEstimates(calcs);
+          updateEstimates(extracted);
         } catch (err) {
           setError('Error analyzing PDF: ' + err.message);
           setUploadedPDF(null);
@@ -404,6 +337,8 @@ Use your calibrated pricing and service ratios. Return the quote in your standar
         }
       };
 
+
+
       const downloadQuote = () => {
         if (!estimates) return;
 
@@ -411,6 +346,8 @@ Use your calibrated pricing and service ratios. Return the quote in your standar
           body { font-family: Arial, sans-serif; max-width: 900px; margin: 0; padding: 20px; }
           .header { text-align: center; border-bottom: 3px solid #2563eb; padding-bottom: 20px; }
           .header h1 { margin: 0; color: #1f2937; }
+          .specs { background: #f3f4f6; padding: 15px; border-radius: 6px; margin: 20px 0; font-size: 14px; }
+          .specs div { padding: 5px 0; }
           .estimate-section { margin: 30px 0; border: 2px solid #e5e7eb; border-radius: 8px; padding: 20px; }
           .tier-badge { display: inline-block; padding: 4px 12px; border-radius: 4px; font-weight: bold; font-size: 12px; margin-bottom: 10px; }
           .aggressive { background: #fee2e2; color: #991b1b; }
@@ -420,6 +357,14 @@ Use your calibrated pricing and service ratios. Return the quote in your standar
           .total-line { display: flex; justify-content: space-between; padding: 12px 0; border-top: 2px solid #1f2937; font-size: 18px; font-weight: bold; margin-top: 10px; }
         </style></head><body>
           <div class="header"><h1>BoothIQ Quote</h1><p>Generated: ${new Date().toLocaleDateString()}</p></div>
+          
+          <div class="specs">
+            <div><strong>Booth Dimensions:</strong> ${width}ft × ${length}ft</div>
+            <div><strong>Environment:</strong> ${indoor ? 'Indoor' : 'Outdoor'}</div>
+            <div><strong>Duration:</strong> ${duration} days</div>
+            <div><strong>Ground Level:</strong> ${groundLevel === 'yes' ? 'Yes' : groundLevel === 'no' ? 'No' : 'Not Sure'}</div>
+            <div><strong>Location:</strong> ${location.charAt(0).toUpperCase() + location.slice(1)}</div>
+          </div>
           
           <div class="estimate-section">
             <div class="tier-badge aggressive">AGGRESSIVE</div>
@@ -467,46 +412,112 @@ Use your calibrated pricing and service ratios. Return the quote in your standar
           <div className="card">
             <div className="header">
               <h1>BoothIQ</h1>
-              <p>Quick booth cost estimation from renderings or PDF parts lists</p>
+              <p>Quick booth cost estimation with custom specifications</p>
             </div>
 
             {error && <div className="error">{error}</div>}
 
-            <div className="form-group">
-              <label className="form-label">Location</label>
-              <select
-                value={location}
-                onChange={(e) => {
-                  setLocation(e.target.value);
-                  if (components) {
-                    const calcs = calculateEstimates(components, e.target.value);
-                    setEstimates(calcs);
-                  }
-                }}
-              >
-                <option value="toronto">Toronto</option>
-                <option value="montreal">Montreal</option>
-                <option value="usa">USA</option>
-              </select>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Location</label>
+                <select
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                >
+                  <option value="toronto">Toronto</option>
+                  <option value="montreal">Montreal</option>
+                  <option value="usa">USA</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Environment</label>
+                <div className="toggle-group">
+                  <button
+                    className={`toggle-btn ${indoor ? 'active' : ''}`}
+                    onClick={() => setIndoor(true)}
+                  >
+                    🏢 Indoor
+                  </button>
+                  <button
+                    className={`toggle-btn ${!indoor ? 'active' : ''}`}
+                    onClick={() => setIndoor(false)}
+                  >
+                    🌤️ Outdoor
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div className="form-group">
-              <h2 style={{ margin: '0 0 15px 0', color: '#374151', fontSize: '16px', fontWeight: '600' }}>Quick Templates</h2>
-              <div className="template-grid">
-                {Object.entries(BOOTH_TEMPLATES).map(([key, template]) => (
+              <label className="form-label">Booth Dimensions (feet)</label>
+              <div className="dimensions-grid">
+                <div>
+                  <label style={{ fontSize: '12px', color: '#6b7280', marginBottom: '5px', display: 'block' }}>Width</label>
+                  <input
+                    type="number"
+                    value={width}
+                    onChange={(e) => setWidth(e.target.value)}
+                    min="1"
+                    step="0.5"
+                    placeholder="Width"
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '12px', color: '#6b7280', marginBottom: '5px', display: 'block' }}>Length</label>
+                  <input
+                    type="number"
+                    value={length}
+                    onChange={(e) => setLength(e.target.value)}
+                    min="1"
+                    step="0.5"
+                    placeholder="Length"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Duration of Use</label>
+              <div className="duration-buttons">
+                {DURATION_OPTIONS.map((day) => (
                   <button
-                    key={key}
-                    className={`template-btn ${selectedTemplate === key ? 'active' : ''}`}
-                    onClick={() => handleTemplateSelect(key)}
+                    key={day}
+                    className={`toggle-btn ${duration === day ? 'active' : ''}`}
+                    onClick={() => setDuration(day)}
                   >
-                    {template.name}
+                    {day} day{day !== 1 ? 's' : ''}
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className="divider">
-              <label className="form-label">Or upload rendering or PDF</label>
+            <div className="form-group">
+              <label className="form-label">Is Ground Level?</label>
+              <div className="three-state-toggle">
+                <button
+                  className={`toggle-btn ${groundLevel === 'yes' ? 'active' : ''}`}
+                  onClick={() => setGroundLevel('yes')}
+                >
+                  ✓ Yes
+                </button>
+                <button
+                  className={`toggle-btn ${groundLevel === 'not-sure' ? 'active' : ''}`}
+                  onClick={() => setGroundLevel('not-sure')}
+                >
+                  ? Not Sure
+                </button>
+                <button
+                  className={`toggle-btn ${groundLevel === 'no' ? 'active' : ''}`}
+                  onClick={() => setGroundLevel('no')}
+                >
+                  ✗ No
+                </button>
+              </div>
+            </div>
+
+            <div className="divider" style={{ marginTop: 40 }}>
+              <label className="form-label">Or upload rendering or PDF for detailed analysis</label>
               <div
                 className={`upload-zone ${dragging ? 'dragging' : ''}`}
                 onClick={() => fileInputRef.current?.click()}
@@ -555,6 +566,9 @@ Use your calibrated pricing and service ratios. Return the quote in your standar
 
             {estimates ? (
               <div>
+                <div style={{ background: '#f3f4f6', padding: '15px', borderRadius: '6px', marginBottom: '20px', fontSize: '14px' }}>
+                  <strong>Current Specs:</strong> {width}ft × {length}ft | {indoor ? 'Indoor' : 'Outdoor'} | {duration} days | Ground: {groundLevel === 'yes' ? 'Level' : groundLevel === 'no' ? 'Uneven' : 'Unknown'}
+                </div>
                 <div className="estimates-grid">
                   {[
                     { tier: 'aggressive', label: 'Aggressive (Budget)', class: 'aggressive' },
@@ -596,7 +610,7 @@ Use your calibrated pricing and service ratios. Return the quote in your standar
               </div>
             ) : (
               <div className="empty-state">
-                <p>Select a template or upload a rendering/PDF to generate estimates</p>
+                <p>Enter booth dimensions above to generate estimates</p>
               </div>
             )}
           </div>
@@ -608,4 +622,3 @@ Use your calibrated pricing and service ratios. Return the quote in your standar
   </script>
 </body>
 </html>
-
