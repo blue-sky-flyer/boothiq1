@@ -894,21 +894,25 @@
           let promptText;
 
           if (pdfText) {
-            // PDF uploaded - extract ALL specs from the PDF, ignore form defaults
-            promptText = `Generate a detailed booth quote based on this PDF estimate/quote document.
+            // PDF uploaded - base quote on LINE ITEMS from the PDF
+            promptText = `Generate a booth quote based PRIMARILY on the LINE ITEMS in this PDF document.
 
-IMPORTANT: Extract booth specifications (dimensions, location, materials, components, services) directly from this PDF content. Do NOT use any default values - all data should come from the PDF.
+CRITICAL: The line items (individual costs for materials, labor, services) in the PDF are the PRIMARY source for this quote. Sum them up and categorize them appropriately.
 
 PDF CONTENT:
-${pdfText.substring(0, 4000)}
+${pdfText.substring(0, 6000)}
 
-Based on the PDF above:
-1. Extract the booth dimensions, location, and all line items
-2. Categorize costs into materials (walls, flooring, graphics, AV/lighting, furniture) and services (design/PM, install/dismantle, logistics)
-3. Apply appropriate tax rate based on location (13% Ontario, 14.975% Quebec, varies for USA)
-4. Provide a complete quote breakdown
+Instructions:
+1. EXTRACT ALL LINE ITEMS from the PDF - these are your primary pricing data
+2. Sum line items into categories:
+   - Materials: walls/fabrication, flooring, graphics, AV/lighting, furniture, rentals
+   - Services: design/PM, install/dismantle, labor, logistics/shipping/drayage
+3. Extract booth dimensions and location if mentioned
+4. Apply appropriate tax rate based on location (13% Ontario HST, 14.975% Quebec GST+QST)
+5. The TOTAL should closely match the sum of line items from the PDF (plus tax if not included)
 
-Use the calibrated service ratios from the SKILL.md for this project type.`;
+Do NOT invent prices - use the actual line item costs from the PDF.
+Use the calibrated service ratios from SKILL.md only if specific service costs are not itemized in the PDF.`;
           } else {
             // Manual entry - use form values
             const specs = {
@@ -1196,7 +1200,6 @@ Provide a complete quote with materials breakdown, services (design/PM, install/
                     key={day}
                     className={`pill-btn ${duration === day ? 'active' : ''}`}
                     onClick={() => setDuration(day)}
-                    disabled={!!uploadedPDF}
                   >
                     {day} day{day !== 1 ? 's' : ''}
                   </button>
@@ -1210,21 +1213,18 @@ Provide a complete quote with materials breakdown, services (design/PM, install/
                 <button
                   className={`segment-btn ${groundLevel === 'yes' ? 'active' : ''}`}
                   onClick={() => setGroundLevel('yes')}
-                  disabled={!!uploadedPDF}
                 >
                   Yes
                 </button>
                 <button
                   className={`segment-btn ${groundLevel === 'not-sure' ? 'active' : ''}`}
                   onClick={() => setGroundLevel('not-sure')}
-                  disabled={!!uploadedPDF}
                 >
                   Not Sure
                 </button>
                 <button
                   className={`segment-btn ${groundLevel === 'no' ? 'active' : ''}`}
                   onClick={() => setGroundLevel('no')}
-                  disabled={!!uploadedPDF}
                 >
                   No
                 </button>
