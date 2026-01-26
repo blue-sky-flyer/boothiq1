@@ -119,6 +119,7 @@ export default {
         const lastMsgIndex = messages.length - 1;
         const jsonInstructions = `\n\nIMPORTANT: Return ONLY a valid JSON object with these exact fields:
 {
+  "booth_specs": { "dimensions": "string (e.g., '20ft x 30ft')", "square_footage": number, "location": "string (city)", "event_name": "string (if mentioned)", "duration_days": number },
   "project_type": "toronto_standard" | "toronto_festival" | "outoftown" | "fabrication_only",
   "materials": { "walls": number, "flooring": number, "graphics": number, "av_lighting": number, "furniture": number, "other": number, "subtotal": number },
   "services": { "design_pm": number, "design_pm_percent": number, "install_dismantle": number, "install_dismantle_percent": number, "logistics": number, "logistics_percent": number, "subtotal": number },
@@ -130,6 +131,7 @@ export default {
   "confidence": "high" | "medium" | "low",
   "notes": ["string", ...]
 }
+CRITICAL: Extract booth_specs from the PDF content - dimensions, square footage, location, event name.
 Use whole numbers for dollar amounts. No markdown, no explanation, just the JSON.`;
         messages = messages.map((msg, i) =>
           i === lastMsgIndex ? { ...msg, content: msg.content + jsonInstructions } : msg
