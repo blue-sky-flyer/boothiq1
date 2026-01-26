@@ -891,29 +891,44 @@
         setAiQuote(null);
 
         try {
-          const specs = {
-            width: parseFloat(width) || 10,
-            length: parseFloat(length) || 10,
-            location: location,
-            environment: indoor ? 'indoor' : 'outdoor',
-            duration: duration,
-            groundLevel: groundLevel,
-            uploadedPdf: uploadedPDF || null,
-            pdfContent: pdfText || null
-          };
+          let promptText;
 
-          let promptText = `Generate a detailed booth quote for:
+          if (pdfText) {
+            // PDF uploaded - extract ALL specs from the PDF, ignore form defaults
+            promptText = `Generate a detailed booth quote based on this PDF estimate/quote document.
+
+IMPORTANT: Extract booth specifications (dimensions, location, materials, components, services) directly from this PDF content. Do NOT use any default values - all data should come from the PDF.
+
+PDF CONTENT:
+${pdfText.substring(0, 4000)}
+
+Based on the PDF above:
+1. Extract the booth dimensions, location, and all line items
+2. Categorize costs into materials (walls, flooring, graphics, AV/lighting, furniture) and services (design/PM, install/dismantle, logistics)
+3. Apply appropriate tax rate based on location (13% Ontario, 14.975% Quebec, varies for USA)
+4. Provide a complete quote breakdown
+
+Use the calibrated service ratios from the SKILL.md for this project type.`;
+          } else {
+            // Manual entry - use form values
+            const specs = {
+              width: parseFloat(width) || 10,
+              length: parseFloat(length) || 10,
+              location: location,
+              environment: indoor ? 'indoor' : 'outdoor',
+              duration: duration,
+              groundLevel: groundLevel
+            };
+
+            promptText = `Generate a detailed booth quote for:
 - Dimensions: ${specs.width}ft × ${specs.length}ft (${specs.width * specs.length} sq ft)
 - Location: ${specs.location}
 - Environment: ${specs.environment}
 - Duration: ${specs.duration} days
-- Ground Level: ${specs.groundLevel === 'yes' ? 'Yes (level floor)' : specs.groundLevel === 'no' ? 'No (uneven, requires leveling)' : 'Unknown'}`;
+- Ground Level: ${specs.groundLevel === 'yes' ? 'Yes (level floor)' : specs.groundLevel === 'no' ? 'No (uneven, requires leveling)' : 'Unknown'}
 
-          if (specs.pdfContent) {
-            promptText += `\n\nAdditional context from uploaded PDF:\n${specs.pdfContent.substring(0, 2000)}`;
+Provide a complete quote with materials breakdown, services (design/PM, install/dismantle, logistics), tax, and total. Use the calibrated service ratios from the SKILL.md for this project type.`;
           }
-
-          promptText += `\n\nProvide a complete quote with materials breakdown, services (design/PM, install/dismantle, logistics), tax, and total. Use the calibrated service ratios from the SKILL.md for this project type.`;
 
           const response = await fetch(GEMINI_WORKER_URL, {
             method: 'POST',
@@ -1046,16 +1061,24 @@
       const downloadQuote = () => {
         if (!aiQuote) return;
 
+        // Use AI-extracted specs if available (from PDF), otherwise use form values
+        const specs = aiQuote.booth_specs || {};
+        const displayDimensions = specs.dimensions || `${width}ft × ${length}ft`;
+        const displayLocation = specs.location || (location.charAt(0).toUpperCase() + location.slice(1));
+        const displayEvent = specs.event_name || '';
+        const displayDuration = specs.duration_days ? `${specs.duration_days} days` : `${duration} day${duration > 1 ? 's' : ''}`;
+
         // Build worksheet data for Excel
         const wsData = [
           ['BoothIQ Quote'],
           ['Generated', new Date().toLocaleDateString()],
           [],
           ['BOOTH SPECIFICATIONS'],
-          ['Dimensions', `${width}ft × ${length}ft`],
-          ['Location', location.charAt(0).toUpperCase() + location.slice(1)],
-          ['Environment', indoor ? 'Indoor' : 'Outdoor'],
-          ['Duration', `${duration} day${duration > 1 ? 's' : ''}`],
+          ['Dimensions', displayDimensions],
+          ['Square Footage', specs.square_footage || (parseFloat(width) * parseFloat(length))],
+          ['Location', displayLocation],
+          ...(displayEvent ? [['Event', displayEvent]] : []),
+          ['Duration', displayDuration],
           [],
           ['ESTIMATE'],
           ['Total', aiQuote.total],

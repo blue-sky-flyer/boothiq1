@@ -14,6 +14,17 @@ const CORS_HEADERS = {
 const QUOTE_SCHEMA = {
   type: "object",
   properties: {
+    booth_specs: {
+      type: "object",
+      properties: {
+        dimensions: { type: "string", description: "Booth dimensions (e.g., '20ft x 30ft')" },
+        square_footage: { type: "number", description: "Total square footage" },
+        location: { type: "string", description: "Event location/city" },
+        event_name: { type: "string", description: "Event or show name if mentioned" },
+        duration_days: { type: "number", description: "Event duration in days" }
+      },
+      description: "Booth specifications extracted from quote/PDF"
+    },
     project_type: {
       type: "string",
       enum: ["toronto_standard", "toronto_festival", "outoftown", "fabrication_only"],
