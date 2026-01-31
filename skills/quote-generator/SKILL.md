@@ -48,11 +48,14 @@ Apply Toronto baseline ratios (adjust for location):
 ### Step 4: Generate Output
 
 Produce itemized quote with:
-- Line items with quantities, dimensions, and prices
-- Service breakdown
+- **Line items for EVERY category**: each wall section, flooring area, graphic element, furniture piece must be its own line item with qty, dimensions, unit price, and extended price
+- **Service breakdown with basis**: show the percentage and what it's a percentage OF (e.g., "Design/PM @ 7.2% of $52,604 fabrication subtotal = $3,775")
+- **I&D detail**: where possible, show crew size, hours/days, and implied rate
 - Subtotal, tax (13% HST for Ontario), total
-- Confidence indicators per line
+- Confidence indicators per line (HIGH/MEDIUM/LOW)
 - Reference to similar historical projects
+
+**The customer expects to see the math behind every number.** A line saying "Walls: $8,800" is insufficient. It must be "Back Wall Outside Sections - Painted MDF, Qty 2, 8'x8' each (128 sqft), $68.75/sqft = $8,800".
 
 ---
 

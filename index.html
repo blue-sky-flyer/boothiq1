@@ -9,6 +9,7 @@
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="lib/pdf.min.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
   <style>
     /* Apple-inspired design system */
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -144,6 +145,18 @@
       background: #ffffff;
       color: #1d1d1f;
       box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    /* Disabled state for form controls (when PDF uploaded) */
+    input:disabled, select:disabled, button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .segment-btn:disabled, .pill-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      pointer-events: none;
     }
 
     /* Duration pills */
@@ -447,6 +460,86 @@
       margin-bottom: 6px;
     }
 
+    /* Line item detail rows */
+    .line-items-toggle {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 0;
+      font-size: 12px;
+      color: #0071e3;
+      cursor: pointer;
+      border: none;
+      background: none;
+      font-family: inherit;
+    }
+
+    .line-items-toggle:hover {
+      color: #0077ed;
+    }
+
+    .line-items-toggle .arrow {
+      font-size: 10px;
+      transition: transform 0.2s ease;
+    }
+
+    .line-items-toggle .arrow.open {
+      transform: rotate(90deg);
+    }
+
+    .line-items-table {
+      width: 100%;
+      font-size: 12px;
+      border-collapse: collapse;
+      margin: 8px 0 12px 0;
+    }
+
+    .line-items-table th {
+      text-align: left;
+      padding: 6px 8px;
+      font-weight: 600;
+      color: #86868b;
+      border-bottom: 1px solid #e8e8ed;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .line-items-table th:last-child {
+      text-align: right;
+    }
+
+    .line-items-table td {
+      padding: 5px 8px;
+      color: #1d1d1f;
+      border-bottom: 1px solid #f0f0f2;
+    }
+
+    .line-items-table td:last-child {
+      text-align: right;
+      font-weight: 500;
+    }
+
+    .line-items-table .conf-badge {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .line-items-table .conf-badge.high { background: rgba(52,199,89,0.12); color: #248a3d; }
+    .line-items-table .conf-badge.medium { background: rgba(255,159,10,0.12); color: #b25000; }
+    .line-items-table .conf-badge.low { background: rgba(255,59,48,0.12); color: #d70015; }
+
+    .service-note {
+      font-size: 12px;
+      color: #86868b;
+      font-style: italic;
+      padding: 2px 0 4px 0;
+    }
+
     /* Collapsible section */
     .collapsible-header {
       display: flex;
@@ -584,6 +677,23 @@
       margin-top: 16px;
     }
 
+    .clear-pdf-btn {
+      background: none;
+      border: none;
+      color: #86868b;
+      cursor: pointer;
+      padding: 2px 6px;
+      font-size: 14px;
+      border-radius: 4px;
+      transition: all 0.2s ease;
+      margin-left: 4px;
+    }
+
+    .clear-pdf-btn:hover {
+      background: #e8e8ed;
+      color: #1d1d1f;
+    }
+
     /* Empty state */
     .empty-state {
       text-align: center;
@@ -638,6 +748,47 @@
         astroTurf: 16.92
       }
     };
+
+    // Line item detail component
+    function LineItemDetail({ lineItems, label, currency }) {
+      const [open, setOpen] = React.useState(false);
+      if (!lineItems || lineItems.length === 0) return null;
+
+      return (
+        <div>
+          <button className="line-items-toggle" onClick={() => setOpen(!open)}>
+            <span className={`arrow ${open ? 'open' : ''}`}>&#9654;</span>
+            {open ? 'Hide' : 'Show'} {lineItems.length} line item{lineItems.length !== 1 ? 's' : ''}
+          </button>
+          {open && (
+            <table className="line-items-table">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Qty</th>
+                  <th>Dimensions</th>
+                  <th>Unit Price</th>
+                  <th>Conf</th>
+                  <th>Extended</th>
+                </tr>
+              </thead>
+              <tbody>
+                {lineItems.map((li, i) => (
+                  <tr key={i}>
+                    <td>{li.item}</td>
+                    <td>{li.qty || ''}</td>
+                    <td>{li.dimensions || ''}</td>
+                    <td>{li.unit_price || ''}</td>
+                    <td>{li.confidence ? <span className={`conf-badge ${li.confidence}`}>{li.confidence}</span> : ''}</td>
+                    <td>{new Intl.NumberFormat('en-US', { style: 'currency', currency: currency || 'CAD', currencyDisplay: 'code', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(li.extended || 0)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      );
+    }
 
     function BoothIQ() {
       const [location, setLocation] = React.useState('toronto');
@@ -861,29 +1012,49 @@
         setAiQuote(null);
 
         try {
-          const specs = {
-            width: parseFloat(width) || 10,
-            length: parseFloat(length) || 10,
-            location: location,
-            environment: indoor ? 'indoor' : 'outdoor',
-            duration: duration,
-            groundLevel: groundLevel,
-            uploadedPdf: uploadedPDF || null,
-            pdfContent: pdfText || null
-          };
+          let promptText;
 
-          let promptText = `Generate a detailed booth quote for:
+          if (pdfText) {
+            // PDF uploaded - base quote on LINE ITEMS from the PDF
+            promptText = `Generate a booth quote based PRIMARILY on the LINE ITEMS in this PDF document.
+
+CRITICAL: The line items (individual costs for materials, labor, services) in the PDF are the PRIMARY source for this quote. Sum them up and categorize them appropriately.
+
+PDF CONTENT:
+${pdfText.substring(0, 6000)}
+
+Instructions:
+1. EXTRACT ALL LINE ITEMS from the PDF - these are your primary pricing data
+2. Sum line items into categories:
+   - Materials: walls/fabrication, flooring, graphics, AV/lighting, furniture, rentals
+   - Services: design/PM, install/dismantle, labor, logistics/shipping/drayage
+3. Extract booth dimensions and location if mentioned
+4. Apply appropriate tax rate based on location (13% Ontario HST, 14.975% Quebec GST+QST)
+5. The TOTAL should closely match the sum of line items from the PDF (plus tax if not included)
+
+Do NOT invent prices - use the actual line item costs from the PDF.
+Use the calibrated service ratios from SKILL.md only if specific service costs are not itemized in the PDF.`;
+          } else {
+            // Manual entry - use form values
+            const specs = {
+              width: parseFloat(width) || 10,
+              length: parseFloat(length) || 10,
+              location: location,
+              environment: indoor ? 'indoor' : 'outdoor',
+              duration: duration,
+              groundLevel: groundLevel
+            };
+
+            promptText = `Generate a detailed booth quote for:
 - Dimensions: ${specs.width}ft × ${specs.length}ft (${specs.width * specs.length} sq ft)
 - Location: ${specs.location}
+- Currency: ${getCurrency()}
 - Environment: ${specs.environment}
 - Duration: ${specs.duration} days
-- Ground Level: ${specs.groundLevel === 'yes' ? 'Yes (level floor)' : specs.groundLevel === 'no' ? 'No (uneven, requires leveling)' : 'Unknown'}`;
+- Ground Level: ${specs.groundLevel === 'yes' ? 'Yes (level floor)' : specs.groundLevel === 'no' ? 'No (uneven, requires leveling)' : 'Unknown'}
 
-          if (specs.pdfContent) {
-            promptText += `\n\nAdditional context from uploaded PDF:\n${specs.pdfContent.substring(0, 2000)}`;
+Provide a complete quote with materials breakdown, services (design/PM, install/dismantle, logistics), tax, and total. Use the calibrated service ratios from the SKILL.md for this project type.`;
           }
-
-          promptText += `\n\nProvide a complete quote with materials breakdown, services (design/PM, install/dismantle, logistics), tax, and total. Use the calibrated service ratios from the SKILL.md for this project type.`;
 
           const response = await fetch(GEMINI_WORKER_URL, {
             method: 'POST',
@@ -1004,10 +1175,13 @@
         }
       };
 
+      const getCurrency = () => location === 'usa' ? 'USD' : 'CAD';
+
       const formatCurrency = (value) => {
         return new Intl.NumberFormat('en-US', {
           style: 'currency',
-          currency: 'USD',
+          currency: getCurrency(),
+          currencyDisplay: 'code',
           minimumFractionDigits: 0,
           maximumFractionDigits: 0
         }).format(value || 0);
@@ -1016,57 +1190,76 @@
       const downloadQuote = () => {
         if (!aiQuote) return;
 
-        const quoteHTML = `<!DOCTYPE html><html><head><style>
-          body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 800px; margin: 0 auto; padding: 40px; color: #1d1d1f; }
-          .header { text-align: center; margin-bottom: 40px; }
-          .header h1 { font-size: 32px; margin: 0 0 8px 0; }
-          .header p { color: #86868b; margin: 0; }
-          .specs { background: #f5f5f7; padding: 20px; border-radius: 12px; margin: 24px 0; }
-          .total-section { text-align: center; padding: 32px; background: #f5f5f7; border-radius: 12px; margin: 24px 0; }
-          .total-amount { font-size: 48px; font-weight: 600; }
-          .section { margin: 24px 0; }
-          .section h3 { font-size: 14px; color: #86868b; text-transform: uppercase; margin-bottom: 12px; }
-          .line-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e8e8ed; }
-        </style></head><body>
-          <div class="header">
-            <h1>BoothIQ Quote</h1>
-            <p>Generated: ${new Date().toLocaleDateString()}</p>
-          </div>
+        // Use AI-extracted specs if available (from PDF), otherwise use form values
+        const specs = aiQuote.booth_specs || {};
+        const displayDimensions = specs.dimensions || `${width}ft × ${length}ft`;
+        const displayLocation = specs.location || (location.charAt(0).toUpperCase() + location.slice(1));
+        const displayEvent = specs.event_name || '';
+        const displayDuration = specs.duration_days ? `${specs.duration_days} days` : `${duration} day${duration > 1 ? 's' : ''}`;
 
-          <div class="specs">
-            <strong>Specifications:</strong> ${width}ft × ${length}ft | ${location.charAt(0).toUpperCase() + location.slice(1)} | ${indoor ? 'Indoor' : 'Outdoor'} | ${duration} days
-          </div>
+        // Build worksheet data for Excel
+        const wsData = [
+          ['BoothIQ Quote'],
+          ['Generated', new Date().toLocaleDateString()],
+          ['Currency', getCurrency()],
+          [],
+          ['BOOTH SPECIFICATIONS'],
+          ['Dimensions', displayDimensions],
+          ['Square Footage', specs.square_footage || (parseFloat(width) * parseFloat(length))],
+          ['Location', displayLocation],
+          ...(displayEvent ? [['Event', displayEvent]] : []),
+          ['Duration', displayDuration],
+          [],
+          ['ESTIMATE'],
+          ['Total', aiQuote.total],
+          ['Tax Rate', `${((aiQuote.tax_rate || 0) * 100).toFixed(2)}%`],
+          [],
+          ['MATERIALS BREAKDOWN'],
+          ['Category', 'Amount', 'Item', 'Qty', 'Dimensions', 'Unit Price', 'Extended', 'Confidence'],
+          ['Walls/Fabrication', aiQuote.materials?.walls || 0],
+          ...(aiQuote.materials?.walls_line_items || []).map(li => ['', '', li.item, li.qty || '', li.dimensions || '', li.unit_price || '', li.extended || '', li.confidence || '']),
+          ['Flooring', aiQuote.materials?.flooring || 0],
+          ...(aiQuote.materials?.flooring_line_items || []).map(li => ['', '', li.item, li.qty || '', li.dimensions || '', li.unit_price || '', li.extended || '', li.confidence || '']),
+          ['Graphics', aiQuote.materials?.graphics || 0],
+          ...(aiQuote.materials?.graphics_line_items || []).map(li => ['', '', li.item, li.qty || '', li.dimensions || '', li.unit_price || '', li.extended || '', li.confidence || '']),
+          ['AV/Lighting', aiQuote.materials?.av_lighting || 0],
+          ...(aiQuote.materials?.av_lighting_line_items || []).map(li => ['', '', li.item, li.qty || '', li.dimensions || '', li.unit_price || '', li.extended || '', li.confidence || '']),
+          ['Furniture', aiQuote.materials?.furniture || 0],
+          ...(aiQuote.materials?.furniture_line_items || []).map(li => ['', '', li.item, li.qty || '', li.dimensions || '', li.unit_price || '', li.extended || '', li.confidence || '']),
+          ['Other', aiQuote.materials?.other || 0],
+          ...(aiQuote.materials?.other_line_items || []).map(li => ['', '', li.item, li.qty || '', li.dimensions || '', li.unit_price || '', li.extended || '', li.confidence || '']),
+          ['Materials Subtotal', aiQuote.materials?.subtotal || 0],
+          [],
+          ['SERVICES BREAKDOWN'],
+          ['Service', 'Amount', 'Rate', 'Note/Detail'],
+          ['Design/PM', aiQuote.services?.design_pm || 0, aiQuote.services?.design_pm_percent ? `${aiQuote.services.design_pm_percent}%` : '', aiQuote.services?.design_pm_note || ''],
+          ['Install/Dismantle', aiQuote.services?.install_dismantle || 0, aiQuote.services?.install_dismantle_percent ? `${aiQuote.services.install_dismantle_percent}%` : ''],
+          ...(aiQuote.services?.install_dismantle_line_items || []).map(li => ['', '', li.item, li.qty || '', li.dimensions || '', li.unit_price || '', li.extended || '']),
+          ['Logistics', aiQuote.services?.logistics || 0, aiQuote.services?.logistics_percent ? `${aiQuote.services.logistics_percent}%` : ''],
+          ...(aiQuote.services?.logistics_line_items || []).map(li => ['', '', li.item, li.qty || '', li.dimensions || '', li.unit_price || '', li.extended || '']),
+          ...(aiQuote.services?.storage ? [['Storage', aiQuote.services.storage]] : []),
+          ...(aiQuote.services?.storage_line_items || []).map(li => ['', '', li.item, li.qty || '', li.dimensions || '', li.unit_price || '', li.extended || '']),
+          ['Services Subtotal', aiQuote.services?.subtotal || 0],
+        ];
 
-          <div class="total-section">
-            <div class="total-amount">${formatCurrency(aiQuote.total)}</div>
-            <p>Total Estimate (incl. ${((aiQuote.tax_rate || 0) * 100).toFixed(2)}% tax)</p>
-          </div>
+        // Add notes if present
+        if (aiQuote.notes?.length > 0) {
+          wsData.push([]);
+          wsData.push(['NOTES']);
+          aiQuote.notes.forEach(note => wsData.push([note]));
+        }
 
-          <div class="section">
-            <h3>Materials - ${formatCurrency(aiQuote.materials?.subtotal)}</h3>
-            ${aiQuote.materials?.walls > 0 ? `<div class="line-item"><span>Walls/Fabrication</span><span>${formatCurrency(aiQuote.materials.walls)}</span></div>` : ''}
-            ${aiQuote.materials?.flooring > 0 ? `<div class="line-item"><span>Flooring</span><span>${formatCurrency(aiQuote.materials.flooring)}</span></div>` : ''}
-            ${aiQuote.materials?.graphics > 0 ? `<div class="line-item"><span>Graphics</span><span>${formatCurrency(aiQuote.materials.graphics)}</span></div>` : ''}
-            ${aiQuote.materials?.av_lighting > 0 ? `<div class="line-item"><span>AV & Lighting</span><span>${formatCurrency(aiQuote.materials.av_lighting)}</span></div>` : ''}
-            ${aiQuote.materials?.furniture > 0 ? `<div class="line-item"><span>Furniture</span><span>${formatCurrency(aiQuote.materials.furniture)}</span></div>` : ''}
-          </div>
+        // Create workbook using SheetJS
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
 
-          <div class="section">
-            <h3>Services - ${formatCurrency(aiQuote.services?.subtotal)}</h3>
-            <div class="line-item"><span>Design & PM</span><span>${formatCurrency(aiQuote.services?.design_pm)}</span></div>
-            <div class="line-item"><span>Install & Dismantle</span><span>${formatCurrency(aiQuote.services?.install_dismantle)}</span></div>
-            <div class="line-item"><span>Logistics</span><span>${formatCurrency(aiQuote.services?.logistics)}</span></div>
-          </div>
+        // Set column widths
+        ws['!cols'] = [{ wch: 20 }, { wch: 15 }, { wch: 35 }, { wch: 8 }, { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 10 }];
 
-          ${aiQuote.notes?.length > 0 ? `<div class="section"><h3>Notes</h3><ul>${aiQuote.notes.map(n => `<li>${n}</li>`).join('')}</ul></div>` : ''}
-        </body></html>`;
+        XLSX.utils.book_append_sheet(wb, ws, 'Quote');
 
-        const blob = new Blob([quoteHTML], { type: 'text/html' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `boothiq-quote-${new Date().toISOString().split('T')[0]}.html`;
-        link.click();
+        // Download as Excel file
+        XLSX.writeFile(wb, `boothiq-quote-${new Date().toISOString().split('T')[0]}.xlsx`);
       };
 
       return (
@@ -1097,12 +1290,14 @@
                   <button
                     className={`segment-btn ${indoor ? 'active' : ''}`}
                     onClick={() => setIndoor(true)}
+                    disabled={!!uploadedPDF}
                   >
                     Indoor
                   </button>
                   <button
                     className={`segment-btn ${!indoor ? 'active' : ''}`}
                     onClick={() => setIndoor(false)}
+                    disabled={!!uploadedPDF}
                   >
                     Outdoor
                   </button>
@@ -1120,6 +1315,7 @@
                   min="1"
                   step="0.5"
                   placeholder="Width"
+                  disabled={!!uploadedPDF}
                 />
                 <span className="dimensions-x">×</span>
                 <input
@@ -1129,6 +1325,7 @@
                   min="1"
                   step="0.5"
                   placeholder="Length"
+                  disabled={!!uploadedPDF}
                 />
               </div>
             </div>
@@ -1211,7 +1408,16 @@
               )}
 
               {uploadedPDF && (
-                <div className="pdf-badge">📄 {uploadedPDF}</div>
+                <div className="pdf-badge">
+                  📄 {uploadedPDF}
+                  <button
+                    className="clear-pdf-btn"
+                    onClick={(e) => { e.stopPropagation(); setUploadedPDF(null); setPdfText(''); }}
+                    title="Clear PDF and edit manually"
+                  >
+                    ✕
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -1255,39 +1461,57 @@
                   <div className="breakdown-card">
                     <div className="breakdown-title">Materials</div>
                     {aiQuote.materials?.walls > 0 && (
-                      <div className="breakdown-item">
-                        <span className="breakdown-item-label">Walls/Fabrication</span>
-                        <span className="breakdown-item-value">{formatCurrency(aiQuote.materials.walls)}</span>
+                      <div>
+                        <div className="breakdown-item">
+                          <span className="breakdown-item-label">Walls/Fabrication</span>
+                          <span className="breakdown-item-value">{formatCurrency(aiQuote.materials.walls)}</span>
+                        </div>
+                        <LineItemDetail currency={getCurrency()} lineItems={aiQuote.materials.walls_line_items} label="wall" />
                       </div>
                     )}
                     {aiQuote.materials?.flooring > 0 && (
-                      <div className="breakdown-item">
-                        <span className="breakdown-item-label">Flooring</span>
-                        <span className="breakdown-item-value">{formatCurrency(aiQuote.materials.flooring)}</span>
+                      <div>
+                        <div className="breakdown-item">
+                          <span className="breakdown-item-label">Flooring</span>
+                          <span className="breakdown-item-value">{formatCurrency(aiQuote.materials.flooring)}</span>
+                        </div>
+                        <LineItemDetail currency={getCurrency()} lineItems={aiQuote.materials.flooring_line_items} label="flooring" />
                       </div>
                     )}
                     {aiQuote.materials?.graphics > 0 && (
-                      <div className="breakdown-item">
-                        <span className="breakdown-item-label">Graphics</span>
-                        <span className="breakdown-item-value">{formatCurrency(aiQuote.materials.graphics)}</span>
+                      <div>
+                        <div className="breakdown-item">
+                          <span className="breakdown-item-label">Graphics</span>
+                          <span className="breakdown-item-value">{formatCurrency(aiQuote.materials.graphics)}</span>
+                        </div>
+                        <LineItemDetail currency={getCurrency()} lineItems={aiQuote.materials.graphics_line_items} label="graphics" />
                       </div>
                     )}
                     {aiQuote.materials?.av_lighting > 0 && (
-                      <div className="breakdown-item">
-                        <span className="breakdown-item-label">AV & Lighting</span>
-                        <span className="breakdown-item-value">{formatCurrency(aiQuote.materials.av_lighting)}</span>
+                      <div>
+                        <div className="breakdown-item">
+                          <span className="breakdown-item-label">AV & Lighting</span>
+                          <span className="breakdown-item-value">{formatCurrency(aiQuote.materials.av_lighting)}</span>
+                        </div>
+                        <LineItemDetail currency={getCurrency()} lineItems={aiQuote.materials.av_lighting_line_items} label="av" />
                       </div>
                     )}
                     {aiQuote.materials?.furniture > 0 && (
-                      <div className="breakdown-item">
-                        <span className="breakdown-item-label">Furniture</span>
-                        <span className="breakdown-item-value">{formatCurrency(aiQuote.materials.furniture)}</span>
+                      <div>
+                        <div className="breakdown-item">
+                          <span className="breakdown-item-label">Furniture</span>
+                          <span className="breakdown-item-value">{formatCurrency(aiQuote.materials.furniture)}</span>
+                        </div>
+                        <LineItemDetail currency={getCurrency()} lineItems={aiQuote.materials.furniture_line_items} label="furniture" />
                       </div>
                     )}
                     {aiQuote.materials?.other > 0 && (
-                      <div className="breakdown-item">
-                        <span className="breakdown-item-label">Other</span>
-                        <span className="breakdown-item-value">{formatCurrency(aiQuote.materials.other)}</span>
+                      <div>
+                        <div className="breakdown-item">
+                          <span className="breakdown-item-label">Other</span>
+                          <span className="breakdown-item-value">{formatCurrency(aiQuote.materials.other)}</span>
+                        </div>
+                        <LineItemDetail currency={getCurrency()} lineItems={aiQuote.materials.other_line_items} label="other" />
                       </div>
                     )}
                     <div className="breakdown-item breakdown-subtotal">
@@ -1298,18 +1522,44 @@
 
                   <div className="breakdown-card">
                     <div className="breakdown-title">Services</div>
-                    <div className="breakdown-item">
-                      <span className="breakdown-item-label">Design & PM</span>
-                      <span className="breakdown-item-value">{formatCurrency(aiQuote.services?.design_pm)}</span>
-                    </div>
-                    <div className="breakdown-item">
-                      <span className="breakdown-item-label">Install & Dismantle</span>
-                      <span className="breakdown-item-value">{formatCurrency(aiQuote.services?.install_dismantle)}</span>
-                    </div>
-                    <div className="breakdown-item">
-                      <span className="breakdown-item-label">Logistics</span>
-                      <span className="breakdown-item-value">{formatCurrency(aiQuote.services?.logistics)}</span>
-                    </div>
+                    {aiQuote.services?.design_pm > 0 && (
+                      <div>
+                        <div className="breakdown-item">
+                          <span className="breakdown-item-label">Design & PM {aiQuote.services.design_pm_percent ? `(${aiQuote.services.design_pm_percent}%)` : ''}</span>
+                          <span className="breakdown-item-value">{formatCurrency(aiQuote.services.design_pm)}</span>
+                        </div>
+                        {aiQuote.services.design_pm_note && (
+                          <div className="service-note">{aiQuote.services.design_pm_note}</div>
+                        )}
+                      </div>
+                    )}
+                    {aiQuote.services?.install_dismantle > 0 && (
+                      <div>
+                        <div className="breakdown-item">
+                          <span className="breakdown-item-label">Install & Dismantle {aiQuote.services.install_dismantle_percent ? `(${aiQuote.services.install_dismantle_percent}%)` : ''}</span>
+                          <span className="breakdown-item-value">{formatCurrency(aiQuote.services.install_dismantle)}</span>
+                        </div>
+                        <LineItemDetail currency={getCurrency()} lineItems={aiQuote.services.install_dismantle_line_items} label="I&D" />
+                      </div>
+                    )}
+                    {aiQuote.services?.logistics > 0 && (
+                      <div>
+                        <div className="breakdown-item">
+                          <span className="breakdown-item-label">Logistics {aiQuote.services.logistics_percent ? `(${aiQuote.services.logistics_percent}%)` : ''}</span>
+                          <span className="breakdown-item-value">{formatCurrency(aiQuote.services.logistics)}</span>
+                        </div>
+                        <LineItemDetail currency={getCurrency()} lineItems={aiQuote.services.logistics_line_items} label="logistics" />
+                      </div>
+                    )}
+                    {aiQuote.services?.storage > 0 && (
+                      <div>
+                        <div className="breakdown-item">
+                          <span className="breakdown-item-label">Storage</span>
+                          <span className="breakdown-item-value">{formatCurrency(aiQuote.services.storage)}</span>
+                        </div>
+                        <LineItemDetail currency={getCurrency()} lineItems={aiQuote.services.storage_line_items} label="storage" />
+                      </div>
+                    )}
                     <div className="breakdown-item breakdown-subtotal">
                       <span className="breakdown-item-label">Subtotal</span>
                       <span className="breakdown-item-value">{formatCurrency(aiQuote.services?.subtotal)}</span>
