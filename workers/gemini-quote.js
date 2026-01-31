@@ -10,6 +10,20 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Headers': 'Content-Type'
 };
 
+// Line item schema used within materials and services
+const LINE_ITEM_SCHEMA = {
+  type: "object",
+  properties: {
+    item: { type: "string", description: "Line item description" },
+    qty: { type: "number", description: "Quantity" },
+    dimensions: { type: "string", description: "Dimensions (e.g., \"8'x8'\" or \"200 sqft\")" },
+    unit_price: { type: "string", description: "Unit price with unit (e.g., \"$68.75/sqft\" or \"$4,400 each\")" },
+    extended: { type: "number", description: "Extended price (qty × unit price)" },
+    confidence: { type: "string", enum: ["high", "medium", "low"], description: "Pricing confidence" }
+  },
+  required: ["item", "extended"]
+};
+
 // Structured output schema for booth quotes
 const QUOTE_SCHEMA = {
   type: "object",
@@ -34,11 +48,17 @@ const QUOTE_SCHEMA = {
       type: "object",
       properties: {
         walls: { type: "number", description: "Wall fabrication cost" },
+        walls_line_items: { type: "array", items: LINE_ITEM_SCHEMA, description: "Itemized wall/structure costs" },
         flooring: { type: "number", description: "Flooring cost" },
+        flooring_line_items: { type: "array", items: LINE_ITEM_SCHEMA, description: "Itemized flooring costs" },
         graphics: { type: "number", description: "Graphics/signage cost" },
+        graphics_line_items: { type: "array", items: LINE_ITEM_SCHEMA, description: "Itemized graphics/signage costs" },
         av_lighting: { type: "number", description: "AV and lighting cost" },
-        furniture: { type: "number", description: "Furniture rental cost" },
+        av_lighting_line_items: { type: "array", items: LINE_ITEM_SCHEMA, description: "Itemized AV/lighting costs" },
+        furniture: { type: "number", description: "Furniture cost" },
+        furniture_line_items: { type: "array", items: LINE_ITEM_SCHEMA, description: "Itemized furniture costs" },
         other: { type: "number", description: "Other materials" },
+        other_line_items: { type: "array", items: LINE_ITEM_SCHEMA, description: "Other itemized costs" },
         subtotal: { type: "number", description: "Materials subtotal" }
       },
       required: ["subtotal"]
@@ -47,11 +67,16 @@ const QUOTE_SCHEMA = {
       type: "object",
       properties: {
         design_pm: { type: "number", description: "Design and project management" },
-        design_pm_percent: { type: "number", description: "Design/PM as % of materials" },
+        design_pm_percent: { type: "number", description: "Design/PM as % of fabrication subtotal" },
+        design_pm_note: { type: "string", description: "Basis for design/PM calculation" },
         install_dismantle: { type: "number", description: "Installation and dismantling labor" },
-        install_dismantle_percent: { type: "number", description: "I&D as % of materials" },
+        install_dismantle_percent: { type: "number", description: "I&D as % of fabrication subtotal" },
+        install_dismantle_line_items: { type: "array", items: LINE_ITEM_SCHEMA, description: "Itemized I&D costs (crew, days, rates)" },
         logistics: { type: "number", description: "Shipping and drayage" },
-        logistics_percent: { type: "number", description: "Logistics as % of materials" },
+        logistics_percent: { type: "number", description: "Logistics as % of fabrication subtotal" },
+        logistics_line_items: { type: "array", items: LINE_ITEM_SCHEMA, description: "Itemized logistics costs" },
+        storage: { type: "number", description: "Storage costs if applicable" },
+        storage_line_items: { type: "array", items: LINE_ITEM_SCHEMA, description: "Itemized storage costs" },
         subtotal: { type: "number", description: "Services subtotal" }
       },
       required: ["subtotal"]
@@ -119,10 +144,24 @@ export default {
         const lastMsgIndex = messages.length - 1;
         const jsonInstructions = `\n\nIMPORTANT: Return ONLY a valid JSON object with these exact fields:
 {
-  "booth_specs": { "dimensions": "string (e.g., '20ft x 30ft')", "square_footage": number, "location": "string (city)", "event_name": "string (if mentioned)", "duration_days": number },
+  "booth_specs": { "dimensions": "string", "square_footage": number, "location": "string", "event_name": "string", "duration_days": number },
   "project_type": "toronto_standard" | "toronto_festival" | "outoftown" | "fabrication_only",
-  "materials": { "walls": number, "flooring": number, "graphics": number, "av_lighting": number, "furniture": number, "other": number, "subtotal": number },
-  "services": { "design_pm": number, "design_pm_percent": number, "install_dismantle": number, "install_dismantle_percent": number, "logistics": number, "logistics_percent": number, "subtotal": number },
+  "materials": {
+    "walls": number, "walls_line_items": [{"item": "string", "qty": number, "dimensions": "string", "unit_price": "string", "extended": number, "confidence": "high"|"medium"|"low"}],
+    "flooring": number, "flooring_line_items": [...],
+    "graphics": number, "graphics_line_items": [...],
+    "av_lighting": number, "av_lighting_line_items": [...],
+    "furniture": number, "furniture_line_items": [...],
+    "other": number, "other_line_items": [...],
+    "subtotal": number
+  },
+  "services": {
+    "design_pm": number, "design_pm_percent": number, "design_pm_note": "string explaining basis (e.g., '7.2% of fabrication subtotal, quoted as lump sum')",
+    "install_dismantle": number, "install_dismantle_percent": number, "install_dismantle_line_items": [{"item": "string", "qty": number, "dimensions": "string (e.g., '18 hrs install + 8 hrs dismantle')", "unit_price": "string", "extended": number}],
+    "logistics": number, "logistics_percent": number, "logistics_line_items": [...],
+    "storage": number, "storage_line_items": [...],
+    "subtotal": number
+  },
   "contingency": number,
   "subtotal_before_tax": number,
   "tax_rate": number,
@@ -131,8 +170,13 @@ export default {
   "confidence": "high" | "medium" | "low",
   "notes": ["string", ...]
 }
-CRITICAL: Extract booth_specs from the PDF content - dimensions, square footage, location, event name.
-Use whole numbers for dollar amounts. No markdown, no explanation, just the JSON.`;
+CRITICAL RULES:
+1. Extract booth_specs from the PDF content - dimensions, square footage, location, event name.
+2. EVERY category with a non-zero dollar amount MUST have line_items showing what makes up that number.
+3. For walls: itemize each wall section (e.g., "Back Wall Outside - Painted MDF", qty, dimensions, $/sqft, extended).
+4. For services: show percentage basis and calculation (e.g., "Design/PM @ 7.2% of $52,604").
+5. For I&D: show crew count, hours/days, and implied rate if calculable.
+6. Use whole numbers for dollar amounts. No markdown, no explanation, just the JSON.`;
         messages = messages.map((msg, i) =>
           i === lastMsgIndex ? { ...msg, content: msg.content + jsonInstructions } : msg
         );
